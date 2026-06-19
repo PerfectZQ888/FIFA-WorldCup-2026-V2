@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07111e">
+  <meta name="color-scheme" content="dark">
+  <title>世界杯 2026 · 数据分析中心</title>
+  <meta name="description" content="2026 FIFA 世界杯 — 实时积分榜、赛程、AI 冠军预测、22 届历史数据、预测准确率仪表盘。">
+  <meta name="keywords" content="世界杯 2026,世界杯,世足赛,World Cup 2026,FIFA,AI 预测,准确率,美加墨世界杯">
+  <meta name="author" content="WorldCup 2026 Analytics Hub">
+
+  <!-- Open Graph / 社交分享 -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="🏆 世界杯 2026 · AI 数据分析中心">
+  <meta property="og:description" content="48 强 104 场 · AI 冠军预测 · 实时积分榜 · 预测准确率 64.3% · 命中集锦 · 进球时间线">
+  <meta property="og:image" content="/static/trophy.jpeg">
+  <meta property="og:url" content="http://172.16.113.181:8001/">
+  <meta property="og:site_name" content="WorldCup 2026 Analytics Hub V2">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="🏆 世界杯 2026 · AI 数据分析中心">
+  <meta name="twitter:description" content="48 强 104 场 · AI 冠军预测 · 准确率 64.3% · 命中集锦">
+  <meta name="twitter:image" content="/static/trophy.jpeg">
+
+  <!-- 主题色 / 移动端 -->
+  <link rel="canonical" href="http://172.16.113.181:8001/">
+  <link rel="icon" type="image/jpeg" href="/static/trophy.jpeg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preload" as="style" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/v2.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+  <script src="/static/calibration.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="/static/accuracy.js" defer></script>
+  <!-- v1.1 优化: 提取 CSS/JS、内存泄漏修复、新增准确率仪表盘、前端校准 -->
+</head>
+<body>
+
+
+<nav class="topbar">
+  <div class="brand">
+    <div class="logo">⚽</div>
+    <div class="v2-badge" title="独立优化版 · 与 V1 (端口 8000) 平行运行">
+      <span class="v2-badge-text">V2</span>
+      <span class="v2-badge-sub">独立优化版</span>
+    </div>
+    <div>
+      <h1>世界杯 2026 · 数据分析中心</h1>
+      <div class="sub">美 · 加 · 墨 · 48 强 · 104 场巅峰对决</div>
+    </div>
+  </div>
+  <div class="nav">
+    <a href="#standings" data-i18n="nav.standings">积分榜</a>
+    <a href="#schedule" data-i18n="nav.schedule">赛程</a>
+    <a href="#scorers" data-i18n="nav.scorers">射手榜</a>
+    <a href="#predictions" data-i18n="nav.predictions">AI 预测</a>
+    <a href="#accuracy" data-i18n="nav.accuracy">📊 准确率</a>
+    <a href="/bracket" data-i18n="nav.bracket">对阵图</a>
+    <a href="#history" data-i18n="nav.history">历届</a>
+    <a href="/docs" target="_blank">数据 API</a>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center">
+        <button class="theme-toggle" id="themeToggle" title="切换主题" aria-label="切换暗黑/明亮主题">
+          <span class="theme-icon-dark">🌙</span><span class="theme-icon-light">☀️</span>
+        </button>
+        <button class="lang-toggle" id="langToggle" title="切换语言 / Switch language" aria-label="切换语言">
+          <span class="lang-icon-zh">中</span><span class="lang-icon-en">EN</span>
+        </button>
+      </div>
+      <div class="v2-livepill" id="v2LivePill">
+      <span class="v2-dot"></span>
+      <span class="v2-tag">V2 LIVE</span>
+      <span class="v2-sep">·</span>
+      <span id="liveStatus">实时 · 第 3 比赛日</span>
+      <span class="v2-sep">·</span>
+      <span class="v2-mono" id="v2LastUpdate">--:--</span>
+      <span class="v2-sep">·</span>
+      <span class="v2-health" id="v2Health">健康 ✓</span>
+    </div>
+</nav>
+
+<main class="container">
+
+  <!-- HERO 横幅 -->
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <span class="edition">第 23 届 · 2026 美加墨世界杯</span>
+        <h2 id="heroTitle">距离决赛<br>还有 35 天</h2>
+        <p class="tagline" id="heroTagline">48 支球队，16 座主办城市，104 场巅峰对决，冠军只有一个。实时数据 + AI 预测，带你纵览史上规模最大的一届世界杯。</p>
+        <div class="meta-row">
+          <div class="meta-item">
+            <span class="v" id="heroDays">35</span>
+            <span class="l">距决赛天数</span>
+          </div>
+          <div class="meta-item">
+            <span class="v" id="heroMatches">8</span>
+            <span class="l">已完赛</span>
+          </div>
+          <div class="meta-item">
+            <span class="v" id="heroGoals">23</span>
+            <span class="l">总进球数</span>
+          </div>
+          <div class="meta-item">
+            <span class="v" id="heroTeams">48</span>
+            <span class="l">参赛球队</span>
+          </div>
+        </div>
+      </div>
+      <div class="hero-trophy">
+        <div class="trophy-ring"></div>
+        <!-- 2026 世界杯官方大力神杯 -->
+        <img class="trophy-img" src="/static/trophy.jpeg" alt="2026 World Cup Trophy" loading="eager">
+      </div>
+    </div>
+  </section>
+
+  <!-- KPI 数字条 -->
+
+  <!-- V2 vs V1 对比条 (V2 独有) -->
+  <section class="v2-diff">
+    <div class="v2-diff-head">
+      <span class="v2-diff-tag">V2</span>
+      <span class="v2-diff-title">独立优化版 · 5 项关键改进</span>
+      <span class="v2-diff-sub">端口 8001 · 与 V1 (8000) 平行运行, 互不影响</span>
+    </div>
+    <div class="v2-diff-grid">
+      <div class="v2-diff-card"><div class="ic">📊</div><div class="t">预测准确率仪表盘</div><div class="d">4 KPI · 走势 · 校准散点 · 冷门榜</div><span class="badge new">V1 无</span></div>
+      <div class="v2-diff-card"><div class="ic">🎯</div><div class="t">前端概率校准</div><div class="d">Brier 0.629 → 0.588 (-6.6%)</div><span class="badge new">V1 无</span></div>
+      <div class="v2-diff-card"><div class="ic">🧠</div><div class="t">ECharts 内存修复</div><div class="d">定时器/实例正确释放</div><span class="badge fix">修复</span></div>
+      <div class="v2-diff-card"><div class="ic">📦</div><div class="t">资源外链拆分</div><div class="d">CSS 1.1MB → 36KB 缓存友好</div><span class="badge perf">性能</span></div>
+      <div class="v2-diff-card"><div class="ic">🔄</div><div class="t">仪表盘自动刷新</div><div class="d">每 30s 检测完赛数变化</div><span class="badge new">V1 无</span></div>
+      <div class="v2-diff-card"><div class="ic">🛡</div><div class="t">systemd 沙箱加固</div><div class="d">NoNewPrivileges + PrivateTmp</div><span class="badge sec">安全</span></div>
+    </div>
+  </section>
+
+  <section id="accuracy" class="acc-section">
+    <div class="section-head">
+      <h2 data-i18n="sec.accuracy">🎯 AI 预测准确率仪表盘</h2>
+      <span class="meta">基于已结束比赛的真实命中统计 · 蒙特卡洛 5000 次模拟</span>
+    </div>
+    <div class="acc-kpi-grid" id="accKpiGrid">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+    <div class="acc-grid">
+      <div class="acc-panel">
+        <h4>累计准确率走势 <span class="hint">按比赛时间排序</span></h4>
+        <div class="acc-chart tall" id="chartAccTrend"></div>
+      </div>
+      <div class="acc-panel">
+        <h4>模型冷门榜 <span class="hint" id="upsetStat">—</span></h4>
+        <div class="upset-list" id="upsetList">
+          <div class="skeleton" style="height:40px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="acc-grid-2">
+      <div class="acc-panel">
+        <h4>概率校准散点图 <span class="hint">预测 vs 实际 · 越接近对角线越好</span></h4>
+        <div class="acc-chart" id="chartAccCalib"></div>
+      </div>
+      <div class="acc-panel">
+        <h4>校准区间对比 <span class="hint">偏差 = 实际 - 预测</span></h4>
+        <div id="calibTable">
+          <div class="skeleton" style="height:160px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 预测命中集锦 (v1.2 新增) — 已猜对比赛的"截图证据" -->
+  <section id="hit-highlights" class="acc-section">
+    <div class="section-head">
+      <h2 data-i18n="sec.hit_highlights">🎯 预测命中集锦</h2>
+      <span class="meta">已猜对比赛的"截图证据" · 按时间倒序 · 精确比分命中加星标</span>
+    </div>
+    <div class="hit-filters" role="tablist" aria-label="命中类型筛选">
+      <button class="hit-filter active" data-filter="all" role="tab" aria-selected="true">全部 <span class="hit-filter-count" id="hitCountAll">0</span></button>
+      <button class="hit-filter" data-filter="exact" role="tab" aria-selected="false">🎯 精确命中 <span class="hit-filter-count" id="hitCountExact">0</span></button>
+      <button class="hit-filter" data-filter="winner" role="tab" aria-selected="false">✅ 胜方命中 <span class="hit-filter-count" id="hitCountWinner">0</span></button>
+    </div>
+    <div class="hit-stats-bar" id="hitStatsBar">
+      <div class="hit-stat">
+        <div class="hit-stat-v" id="hitStatTotal">0</div>
+        <div class="hit-stat-l">命中场次</div>
+      </div>
+      <div class="hit-stat">
+        <div class="hit-stat-v" id="hitStatExact">0</div>
+        <div class="hit-stat-l">精确比分</div>
+      </div>
+      <div class="hit-stat">
+        <div class="hit-stat-v" id="hitStatRate">0%</div>
+        <div class="hit-stat-l">胜平负命中率</div>
+      </div>
+      <div class="hit-stat">
+        <div class="hit-stat-v" id="hitStatLast">—</div>
+        <div class="hit-stat-l">最近命中</div>
+      </div>
+    </div>
+    <div class="hit-grid" id="hitGrid">
+      <div class="skeleton" style="height:160px"></div>
+      <div class="skeleton" style="height:160px"></div>
+      <div class="skeleton" style="height:160px"></div>
+    </div>
+  </section>
+
+  <div class="kpi-strip">
+    <div class="kpi"><div class="v" id="kpiFinished">8</div><div class="l">已完赛</div><div class="sub" id="kpiFinishedSub">共 104 场</div></div>
+    <div class="kpi"><div class="v" id="kpiRemaining">96</div><div class="l">未开赛</div><div class="sub">小组赛 → 决赛</div></div>
+    <div class="kpi live"><div class="v" id="kpiUpcoming">8</div><div class="l">未来 24h</div><div class="sub" id="kpiUpcomingSub">即将开球</div></div>
+    <div class="kpi"><div class="v" id="kpiGpg">2.9</div><div class="l">场均进球</div><div class="sub">本届赛事均值</div></div>
+    <div class="kpi"><div class="v" id="kpiGroups">4</div><div class="l">已开赛小组</div><div class="sub">A · B · C · D</div></div>
+    <div class="kpi"><div class="v" id="kpiStadiums">16</div><div class="l">主办球场</div><div class="sub">横跨三国</div></div>
+  </div>
+
+  <!-- 积分榜 -->
+  <section id="standings">
+    <div class="section-head">
+      <h2 data-i18n="sec.kpi">小组赛积分榜</h2>
+      <span class="meta">前 2 名直接出线 · 8 个成绩最好的小组第 3 名晋级 32 强</span>
+    </div>
+    <div class="standings-grid" id="standingsGrid">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+  </section>
+
+  <!-- 直播中心：正在直播 + 即将开球 + CCTV5 入口 -->
+  <section id="live">
+    <div class="section-head">
+      <h2>
+        <span style="display:inline-flex;align-items:center;gap:8px">
+          <span class="live-dot"></span>
+          赛事直播中心
+        </span>
+        <span class="live-meta" id="liveMeta">— 自动刷新中</span>
+      </h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="watch-btn" id="refreshLiveBtn" style="cursor:pointer;background:linear-gradient(135deg, rgba(0,214,143,0.18) 0%, rgba(0,214,143,0.08) 100%);border-color:rgba(0,214,143,0.4);color:var(--green)">
+          <span style="font-size:14px">↻</span>
+          <span>立即刷新</span>
+        </button>
+        <a class="watch-btn" href="https://tv.cctv.com/live/cctv5/" target="_blank" rel="noopener">
+          <span style="font-size:14px">📺</span>
+          <span>观看 CCTV5 直播</span>
+        </a>
+        <a class="watch-btn" href="https://tiyu.baidu.com/al/match?match=%E4%B8%96%E7%95%8C%E6%9D%AF" target="_blank" rel="noopener">
+          <span style="font-size:14px">📊</span>
+          <span>百度体育数据</span>
+        </a>
+      </div>
+    </div>
+    <div class="live-grid" id="liveGrid">
+      <div class="skeleton"></div>
+    </div>
+  </section>
+
+  <!-- 赛程（仿百度体育日期切换） -->
+  <section id="schedule">
+    <div class="section-head">
+      <h2>赛程总览</h2>
+      <span class="meta">点击日期切换查看 · 共 104 场 · 时间显示为北京时间 (CST, UTC+8)</span>
+    </div>
+    <div class="date-bar" id="dateBar"></div>
+    <div class="matches-list" id="scheduleList">
+      <div class="skeleton"></div>
+    </div>
+  </section>
+
+  <!-- 完整射手榜（CCTV 风格多列） -->
+  <section id="scorers">
+    <div class="section-head">
+      <h2>完整射手榜 <span style="color:var(--text-mute);font-size:14px;font-weight:400">CCTV 官方实时</span></h2>
+      <span class="meta">按进球数降序 · 第一名高亮 · 共 20 个名额 · 每 5 分钟自动刷新</span>
+    </div>
+    <div class="scorers-panel">
+      <div class="panel-head">
+        <h3>2026 世界杯 · 射手榜</h3>
+        <span class="source-tag" id="scorersSourceTag">CCTV</span>
+      </div>
+      <div id="scorersTableWrap">
+        <div class="scorers-loading">加载中...</div>
+      </div>
+      <div class="scorers-footer">
+        <span id="scorersTs">—</span>
+        <button class="refresh-btn" id="refreshScorersBtn">↻ 立即刷新</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 预测 + 射手榜 -->
+  <section id="predictions" class="two-col">
+    <div class="panel">
+      <h3>AI 冠军预测榜 <span class="tag" id="predTag" title="综合 4 因子加权评分（FIFA 排名 40% · 世界杯历史成绩 20% · 当前球员阵容 30% · 主场/卫冕/联盟加成 10%），蒙特卡洛 5000 次模拟整届赛事">FIFA + 历史 + 阵容 · 5000 次模拟 ⓘ</span></h3>
+      <div class="chart tall" id="chartPredictions"></div>
+    </div>
+    <div class="panel">
+      <h3>射手榜 <span class="tag" id="scorerTag">实时更新</span></h3>
+      <div id="topScorers"></div>
+      <h3 style="margin-top:24px">晋级概率雷达 <span class="tag">六强对比</span></h3>
+      <div class="chart short" id="chartStages"></div>
+    </div>
+  </section>
+
+  <!-- 历史 -->
+  <!-- 预测准确率仪表盘 (v1.1 新增) -->
+  <section id="history">
+    <div class="section-head">
+      <h2 data-i18n="sec.history">22 届世界杯历史</h2>
+      <span class="meta">1930 乌拉圭 → 2022 卡塔尔 · 8 支球队捧起过大力神杯</span>
+    </div>
+    <div class="two-col">
+      <div class="panel">
+        <h3>夺冠次数统计 <span class="tag">历届冠军</span></h3>
+        <div class="chart" id="chartChampions"></div>
+      </div>
+      <div class="panel">
+        <h3>赛事规模演变 <span class="tag">场次 · 进球</span></h3>
+        <div class="chart" id="chartEvolution"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>世界杯 2026 数据分析中心 · 基于 v3 真实数据方案构建</p>
+    <p style="margin-top:8px">数据来源：FIFA 2025-12-05 抽签 + 赛事实时数据 · 最后更新：<span class="update-ts" id="updateTs">—</span></p>
+    <p style="margin-top:8px">数据 API：<a href="/docs" target="_blank">/docs</a> · 数据源：<a href="https://github.com/openfootball/worldcup.json" target="_blank">openfootball/worldcup.json</a></p>
+  </footer>
+</main>
+
+<!-- 回到顶部浮动按钮 (v1.2) -->
+<button id="backToTop" type="button" aria-label="回到顶部" title="回到顶部">
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+    <path fill="currentColor" d="M12 4l-8 8h5v8h6v-8h5z"/>
+  </svg>
+</button>
+
+  <script>
+  // V2 状态条: 每 10s 拉一次 /api/health 展示在右上角 LIVE pill
+  (function() {
+    var lastEl = document.getElementById('v2LastUpdate');
+    var healthEl = document.getElementById('v2Health');
+    if (!lastEl) return;
+    function pad(n){ return n<10?'0'+n:n; }
+    function fmt(d){
+      return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+    }
+    async function tick() {
+      try {
+        var r = await fetch('/api/health', {cache:'no-store'});
+        if (!r.ok) throw new Error(r.status);
+        var j = await r.json();
+        lastEl.textContent = '更新 ' + fmt(new Date());
+        if (healthEl) { healthEl.textContent = '健康 ✓'; healthEl.classList.remove('bad'); }
+      } catch(e) {
+        if (healthEl) { healthEl.textContent = '异常 ✗'; healthEl.classList.add('bad'); }
+      }
+    }
+    tick();
+    setInterval(tick, 10000);
+  })();
+  </script>
+
+<!-- 比赛详情弹窗 (v1.2) -->
+<div class="match-modal" id="matchModal" role="dialog" aria-modal="true" aria-labelledby="matchModalTitle" hidden>
+  <div class="match-modal-overlay" data-close-modal></div>
+  <div class="match-modal-card">
+    <header class="match-modal-head">
+      <h3 id="matchModalTitle">比赛详情</h3>
+      <div class="match-modal-actions">
+        <button class="match-modal-share" id="matchModalCopy" title="复制分享文案到剪贴板">
+          <span>📋</span><span>复制文案</span>
+        </button>
+        <button class="match-modal-share" id="matchModalShare" title="导出为图片分享">
+          <span>📷</span><span>导出图片</span>
+        </button>
+        <button class="match-modal-close" data-close-modal aria-label="关闭">×</button>
+      </div>
+    </header>
+    <div class="match-modal-body" id="matchModalBody">
+      <div class="skeleton" style="height:40px"></div>
+      <div class="skeleton" style="height:200px"></div>
+    </div>
+  </div>
+</div>
+<!-- Toast 通知容器 (v1.2) -->
+<div class="toast-container" id="toastContainer" role="status" aria-live="polite"></div>
+
+<!-- 键盘快捷键提示 (v1.2) -->
+<div class="kbd-hint" id="kbdHint" hidden>
+  <div class="kbd-hint-head">
+    <strong>⌨️ 键盘快捷键</strong>
+    <button class="kbd-hint-close" id="kbdHintClose" aria-label="关闭">×</button>
+  </div>
+  <ul>
+    <li><kbd>?</kbd> 显示/隐藏此帮助</li>
+    <li><kbd>/</kbd> 跳到搜索（即将推出）</li>
+    <li><kbd>J</kbd> / <kbd>K</kbd> 上一/下一张命中卡</li>
+    <li><kbd>←</kbd> / <kbd>→</kbd> 上/下个 section</li>
+    <li><kbd>Esc</kbd> 关闭弹窗</li>
+    <li><kbd>Enter</kbd> 打开选中卡详情</li>
+    <li><kbd>T</kbd> 切换主题</li>
+    <li><kbd>L</kbd> 切换语言</li>
+  </ul>
+</div>
+
+</body></html>

@@ -1,0 +1,40 @@
+# ============================================================
+# WorldCup 2026 Analytics Hub — V2 (独立优化版)
+# 端口: 8001 (V1 用 8000)
+# 安装: sudo cp backend/wc2026-v2.service /etc/systemd/system/
+#       sudo systemctl daemon-reload
+#       sudo systemctl enable --now wc2026-v2
+# 卸载: sudo systemctl disable --now wc2026-v2
+#       sudo rm /etc/systemd/system/wc2026-v2.service
+#       sudo systemctl daemon-reload
+# 日志:  tail -f /data/FIFA_WorldCup_2026_V2/backend/logs/v2.log
+# ============================================================
+
+[Unit]
+Description=WorldCup 2026 Analytics Hub V2 (Standalone, Port 8001)
+Documentation=https://github.com/yourname/wc2026-v2
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/FIFA_WorldCup_2026_V2/backend
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONPATH=/data/FIFA_WorldCup_2026_V2/backend"
+ExecStart=/usr/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8001 --workers 1
+Restart=always
+RestartSec=5
+StartLimitBurst=10
+# 日志写到 V2 自己的 logs 目录 (与 V1 logs/ 完全隔离)
+StandardOutput=append:/data/FIFA_WorldCup_2026_V2/backend/logs/v2.log
+StandardError=append:/data/FIFA_WorldCup_2026_V2/backend/logs/v2.log
+
+# 安全加固 (可选, 默认开启)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/data/FIFA_WorldCup_2026_V2/backend/data /data/FIFA_WorldCup_2026_V2/backend/logs
+
+[Install]
+WantedBy=multi-user.target
