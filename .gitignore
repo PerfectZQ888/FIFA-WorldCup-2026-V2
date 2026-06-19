@@ -76,3 +76,6 @@ preview.png
 REPORT.md
 REPORT.archived.*.md
 REPORT_INDEX.md
+
+# Release notes (临时, 不会入库, 用 gh release create 发布)
+.release/
