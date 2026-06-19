@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 日志和数据库 (运行时生成)
+backend/logs/*.log
+backend/logs/*.pid
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+backend/data/*.bak.*
+!backend/data/tournament_data.py
+!backend/data/.gitkeep
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+.~*
+nul
+
+# 缓存
+.cache/
+.mypy_cache/
+.ruff_cache/
+
+# V2 特有
+preview.png
+
+# 备份文件 (带时间戳的中间版本, e.g. .bak.20260619_xxx)
+*.bak*
+*.bak.*
+*.bak
+
+# Codex / OpenClaw 本地占位
+.codex/
+.agents/
+
+# 团队内部工作日志 (REPORT.md 给 main→飞书用, 不入库)
+REPORT.md
+REPORT.archived.*.md
+REPORT_INDEX.md

@@ -1,0 +1,166 @@
+/* ============================================================
+ *  V2 独立视觉标识 (覆盖/扩展 style.css)
+ *  - V2 角标 / LIVE 状态条 / V2-vs-V1 对比条
+ *  - 区别于 V1 的青蓝 (cyan) 辅助色, 保留金色主体
+ * ============================================================ */
+:root {
+  --v2-cyan:    #4fd1c5;   /* V2 主辅助色 */
+  --v2-cyan-2:  #7fffe6;
+  --v2-cyan-bg: rgba(79, 209, 197, 0.10);
+  --v2-cyan-bd: rgba(79, 209, 197, 0.35);
+  --v2-grad:    linear-gradient(135deg, #4fd1c5 0%, #4ea8ff 100%);
+}
+
+/* ────── V2 角标 (在 topbar logo 旁) ────── */
+.v2-badge {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  margin-left: 12px; padding: 4px 10px;
+  background: var(--v2-grad);
+  border-radius: 8px;
+  color: #042b2a;
+  box-shadow: 0 2px 12px rgba(79, 209, 197, 0.35);
+  position: relative;
+  cursor: default;
+  min-width: 44px;
+}
+.v2-badge::before {
+  content: ''; position: absolute; inset: -2px;
+  border-radius: 10px;
+  background: var(--v2-grad);
+  filter: blur(8px); opacity: 0.4; z-index: -1;
+}
+.v2-badge-text {
+  font-family: 'Orbitron', monospace; font-weight: 900;
+  font-size: 16px; line-height: 1; letter-spacing: 1px;
+}
+.v2-badge-sub {
+  font-size: 8px; font-weight: 600; letter-spacing: 0.5px;
+  margin-top: 2px; opacity: 0.85;
+}
+
+/* ────── V2 LIVE 状态条 (替换 status-pill) ────── */
+.v2-livepill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  background: rgba(79, 209, 197, 0.08);
+  border: 1px solid var(--v2-cyan-bd);
+  font-size: 12px; font-weight: 500;
+  color: var(--v2-cyan-2);
+  white-space: nowrap;
+}
+.v2-livepill .v2-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--v2-cyan);
+  box-shadow: 0 0 8px var(--v2-cyan);
+  animation: v2-pulse 1.6s ease-in-out infinite;
+}
+.v2-livepill .v2-tag {
+  font-family: 'Orbitron', monospace; font-weight: 800;
+  letter-spacing: 1px; color: var(--v2-cyan);
+  font-size: 11px;
+}
+.v2-livepill .v2-sep { color: rgba(255,255,255,0.2); }
+.v2-livepill .v2-mono {
+  font-family: 'Orbitron', monospace; font-size: 11px;
+  color: var(--gold-2);
+}
+.v2-livepill .v2-health { color: var(--green); font-weight: 600; }
+.v2-livepill .v2-health.bad { color: var(--red); }
+@keyframes v2-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* ────── V2 vs V1 对比条 ────── */
+.v2-diff {
+  position: relative;
+  margin: 28px 0 0;
+  padding: 20px 22px 22px;
+  background:
+    linear-gradient(135deg, rgba(79,209,197,0.06) 0%, rgba(78,168,255,0.04) 100%),
+    var(--surface);
+  border: 1px solid var(--v2-cyan-bd);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+}
+.v2-diff::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--v2-grad);
+}
+.v2-diff-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.v2-diff-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 6px;
+  background: var(--v2-grad); color: #042b2a;
+  font-family: 'Orbitron', monospace; font-weight: 900; font-size: 12px;
+  letter-spacing: 1px;
+}
+.v2-diff-title {
+  font-family: 'Orbitron', monospace; font-weight: 700; font-size: 16px;
+  color: var(--text);
+}
+.v2-diff-sub {
+  font-size: 12px; color: var(--text-mute); margin-left: auto;
+}
+.v2-diff-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.v2-diff-card {
+  position: relative;
+  padding: 14px 16px;
+  background: rgba(15,28,48,0.6);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  transition: transform .2s ease, border-color .2s ease;
+}
+.v2-diff-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--v2-cyan-bd);
+}
+.v2-diff-card .ic { font-size: 22px; margin-bottom: 6px; }
+.v2-diff-card .t {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  margin-bottom: 4px;
+}
+.v2-diff-card .d {
+  font-size: 11px; color: var(--text-mute); line-height: 1.5;
+}
+.v2-diff-card .badge {
+  position: absolute; top: 10px; right: 10px;
+  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.v2-diff-card .badge.new  { background: rgba(79,209,197,0.18); color: var(--v2-cyan-2); border: 1px solid var(--v2-cyan-bd); }
+.v2-diff-card .badge.fix  { background: rgba(255,85,119,0.15); color: var(--red); border: 1px solid rgba(255,85,119,0.3); }
+.v2-diff-card .badge.perf { background: rgba(212,175,55,0.15); color: var(--gold-2); border: 1px solid rgba(212,175,55,0.3); }
+.v2-diff-card .badge.sec  { background: rgba(78,168,255,0.15); color: var(--blue); border: 1px solid rgba(78,168,255,0.3); }
+
+/* ────── V2 顶栏主题色微调 (与 V1 区分) ────── */
+.topbar { border-bottom: 1px solid rgba(79,209,197,0.12); }
+.topbar .nav a:hover {
+  color: var(--v2-cyan-2);
+  background: rgba(79,209,197,0.08);
+}
+
+/* ────── V2 强调的 "准确率" section 标题 ────── */
+#accuracy::before {
+  content: 'V2 独占模块';
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 10px; border-radius: 6px;
+  background: var(--v2-grad); color: #042b2a;
+  font-family: 'Orbitron', monospace; font-weight: 800; font-size: 10px;
+  letter-spacing: 1px;
+}
+
+/* ────── 响应式微调 ────── */
+@media (max-width: 720px) {
+  .v2-badge-sub { display: none; }
+  .v2-diff-sub { width: 100%; margin-left: 0; }
+  .v2-livepill .v2-sep, .v2-livepill .v2-mono { display: none; }
+}

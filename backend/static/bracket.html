@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07111e">
+  <meta name="color-scheme" content="dark">
+  <title>对阵图 · 世界杯 2026 · V2</title>
+  <meta name="description" content="2026 FIFA 世界杯 32 强淘汰赛对阵图：完整路径、AI 预测晋级球队、5000 次蒙特卡洛模拟。">
+  <link rel="icon" type="image/jpeg" href="/static/trophy.jpeg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/v2.css">
+  <link rel="stylesheet" href="/static/bracket.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" defer></script>
+  <script src="/static/bracket.js" defer></script>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="brand">
+    <div class="logo">⚽</div>
+    <div class="v2-badge" title="独立优化版 · 与 V1 (端口 8000) 平行运行">
+      <span class="v2-badge-text">V2</span>
+      <span class="v2-badge-sub">独立优化版</span>
+    </div>
+    <div>
+      <h1>世界杯 2026 · 数据分析中心</h1>
+      <div class="sub">美 · 加 · 墨 · 48 强 · 104 场巅峰对决</div>
+    </div>
+  </div>
+  <div class="nav">
+    <a href="/#standings">积分榜</a>
+    <a href="/#schedule">赛程</a>
+    <a href="/#scorers">射手榜</a>
+    <a href="/#predictions">AI 预测</a>
+    <a href="/#accuracy">📊 准确率</a>
+    <a href="/bracket" class="active">对阵图</a>
+    <a href="/#history">历届</a>
+    <a href="/docs" target="_blank">数据 API</a>
+  </div>
+  <div class="v2-livepill" id="v2LivePill">
+    <span class="v2-dot"></span>
+    <span class="v2-tag">V2 LIVE</span>
+    <span class="v2-sep">·</span>
+    <span class="v2-mono" id="v2LastUpdate">--:--</span>
+    <span class="v2-sep">·</span>
+    <span class="v2-health" id="v2Health">健康 ✓</span>
+  </div>
+</nav>
+
+<main class="container">
+
+  <!-- 紧凑型标题条 (替代大 hero) -->
+  <section class="bk-header">
+    <div class="bk-header-left">
+      <h2>🏆 淘汰赛对阵图 <span class="bk-tag">AI 预测版</span></h2>
+      <p>从 32 强到冠军的完整路径 · 基于 <b style="color:#d4af37">5000 次蒙特卡洛模拟</b> · 每张卡片显示 AI 预测比分、胜率、晋级方</p>
+    </div>
+    <div class="bk-header-stats">
+      <div class="stat"><span class="v" id="statMatches">31</span><span class="l">淘汰赛场次</span></div>
+      <div class="stat"><span class="v" id="statTeams">32</span><span class="l">参赛球队</span></div>
+      <div class="stat"><span class="v" id="statRounds">5</span><span class="l">淘汰轮次</span></div>
+      <div class="stat highlight"><span class="v" id="statPredicted">–</span><span class="l">已 AI 预测</span></div>
+    </div>
+  </section>
+
+  <!-- 工具条 (放最前, 方便操作) -->
+  <div class="bk-toolbar">
+    <span class="pill">🏆 2026 世界杯</span>
+    <span class="pill mute" id="pillR32">32 强 · 16 场</span>
+    <span class="pill mute" id="pillR16">16 强 · 8 场</span>
+    <span class="pill mute" id="pillQF">8 强 · 4 场</span>
+    <span class="pill mute" id="pillSF">半决赛 · 2 场</span>
+    <span class="pill mute" id="pillF">决赛 · 1 场</span>
+    <span class="spacer"></span>
+    <button class="btn" id="btnToggleHelp">📖 图例说明</button>
+    <button class="btn" id="btnReload">🔄 重新加载</button>
+  </div>
+
+  <!-- 图例说明 (默认折叠) -->
+  <div class="bk-explain" id="bkExplain" style="display:none">
+    <div class="bk-explain-head">
+      <span class="tag">📖 怎么看这张对阵图</span>
+      <button class="close" id="btnCloseHelp">✕</button>
+    </div>
+    <div class="bk-explain-grid">
+      <div class="bk-explain-item">
+        <div class="ico">🏆</div>
+        <div class="t">金色高亮</div>
+        <div class="d">AI 预测的胜方: 名字金色, 胜率条更长, 数字青色</div>
+      </div>
+      <div class="bk-explain-item">
+        <div class="ico">❓</div>
+        <div class="t">灰色虚线卡片</div>
+        <div class="d">对阵尚未确定, 等待上游比赛 (例如 "等待 16 强 决出")</div>
+      </div>
+      <div class="bk-explain-item">
+        <div class="ico">📊</div>
+        <div class="t">胜率条</div>
+        <div class="d">每行末尾的进度条长度 = AI 预测的获胜概率, 数字为百分比</div>
+      </div>
+      <div class="bk-explain-item">
+        <div class="ico">👑</div>
+        <div class="t">决赛冠军</div>
+        <div class="d">决赛胜方会标 👑 皇冠, 卡片用青蓝金边 + 渐变高亮</div>
+      </div>
+      <div class="bk-explain-item">
+        <div class="ico">🖱</div>
+        <div class="t">悬停详情</div>
+        <div class="d">悬停任意卡片, 弹窗显示比赛时间、场地、详细胜率、AI 预测比分</div>
+      </div>
+      <div class="bk-explain-item">
+        <div class="ico">⚙️</div>
+        <div class="t">模拟方法</div>
+        <div class="d">4 因子加权 (ELO / 进攻 / 防守 / 主场) · 5000 次蒙特卡洛</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span class="item"><span class="swatch predicted"></span>已 AI 预测 (胜方已亮)</span>
+    <span class="item"><span class="swatch tbd"></span>TBD (上游未决出)</span>
+    <span class="item"><span class="swatch champion"></span>决赛冠军 👑</span>
+    <span class="item"><span class="swatch line"></span>晋级连线</span>
+    <span class="item" style="margin-left:auto">数据源: <code>GET /api/bracket</code></span>
+  </div>
+
+  <div class="bracket-scroll">
+    <div class="bracket-grid" id="bracketGrid">
+      <div class="loading">⏳ 加载对阵数据中…</div>
+    </div>
+  </div>
+
+  <footer>
+    最后更新: <span class="update-ts" id="updateTs">—</span> · 数据每 5 分钟自动刷新 ·  V2 独立优化版
+  </footer>
+
+</main>
+
+<!-- Tooltip -->
+<div class="bk-tooltip" id="tooltip"></div>
+
+</body>
+</html>
