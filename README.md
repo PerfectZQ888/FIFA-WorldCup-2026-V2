@@ -6,7 +6,30 @@
 
 V2 是 V1 (`/data/FIFA_WorldCup_2026/`) 的**完全独立**优化版, 共享同一份数据血缘但**目录、端口、日志、配置全隔离**。
 
+## 🌐 跨平台支持 (Linux / macOS / Windows)
+
+V2 已全面跨平台适配，**Web 应用本体在任何 OS 都能跑**，部署脚本按系统分别提供：
+
+| OS | 临时启动 | 开机自启 |
+|---|---|---|
+| **Linux** (systemd) | `./start.sh` | `sudo ./install-service.sh` |
+| **macOS** (launchd) | `./start.sh` | `./install-service-macos.sh` |
+| **Windows** | `start.bat` 或 `start.ps1` | Task Scheduler (见 DEPLOY.md) |
+
+**Python 代码 100% 跨平台** — 用了 `pathlib.Path`、无 `subprocess`、无硬编码路径。
+**前端 100% 跨平台** — 纯 HTML/CSS/JS、无 `navigator.platform` 检测。
+
+### Windows 特别注意
+- 用 `start.bat` 或 `start.ps1`（bash 脚本跑不了）
+- 依赖装 `requirements-windows.txt`（去掉 `uvloop`，因为它不支持 Windows）
+- 开机自启用 Task Scheduler（详细步骤见 DEPLOY.md）
+
+### macOS 特别注意
+- macOS 默认 bash 3.2 也能跑 `./start.sh`（专门做了兼容）
+- 系统 Python 可能在 `/opt/homebrew/bin/python3`，需要 `brew install python@3.11`
+
 ## 🚀 两种部署方式
+
 
 ### A) 临时启动 (开发/调试)
 
@@ -112,6 +135,28 @@ FIFA_WorldCup_2026_V2/
 ./stop.sh                        # 停止
 tail -f backend/logs/v2.log      # 实时日志
 V2_PORT=9001 ./start.sh          # 自定义端口
+```
+
+### macOS launchd 服务 (./install-service-macos.sh 后)
+```bash
+launchctl list | grep wc2026-v2    # 状态
+launchctl start  com.wc2026-v2     # 启动
+launchctl stop   com.wc2026-v2     # 停止
+launchctl unload ~/Library/LaunchAgents/com.wc2026-v2.plist   # 卸载
+tail -f backend/logs/v2.log        # 实时日志
+```
+
+### Windows (手动开 cmd)
+```cmd
+start.bat                          # 启动
+stop.bat                           # 停止
+status.bat                         # 状态
+```
+或 PowerShell (推荐, 彩色输出)：
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+powershell -ExecutionPolicy Bypass -File .\stop.ps1
+powershell -ExecutionPolicy Bypass -File .\status.ps1
 ```
 
 ### systemd 服务 (sudo ./install-service.sh 后)

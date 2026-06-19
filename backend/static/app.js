@@ -1639,7 +1639,7 @@ async function copyMatchShareText() {
     ``,
     `🕐 ${m.match_date} ${m.match_time} · ${m.venue || ''}`,
     `🏆 WorldCup 2026 · AI Analytics Hub V2`,
-    `🔗 http://172.16.113.181:8001/`
+    `🔗 ${window.location.origin}/`
   ].join('\n');
   
   try {
