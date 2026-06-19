@@ -3,8 +3,11 @@
 > 2026 美加墨世界杯 · 48 强 · 104 场 · 实时数据 + AI 冠军预测 + 预测准确率仪表盘
 
 ![python](https://img.shields.io/badge/python-3.11%2B-blue) ![fastapi](https://img.shields.io/badge/fastapi-0.115-green) ![port](https://img.shields.io/badge/port-8001-orange)
+![release](https://img.shields.io/github/v/release/PerfectZQ888/FIFA-WorldCup-2026-V2?include_prereleases&style=flat-square) ![release-date](https://img.shields.io/github/release-date/PerfectZQ888/FIFA-WorldCup-2026-V2?style=flat-square) ![license](https://img.shields.io/github/license/PerfectZQ888/FIFA-WorldCup-2026-V2?style=flat-square) ![platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blueviolet?style=flat-square)
 
 V2 是 V1 (`/data/FIFA_WorldCup_2026/`) 的**完全独立**优化版, 共享同一份数据血缘但**目录、端口、日志、配置全隔离**。
+
+> 📦 **最新发布：** [v1.3.0](https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2/releases/tag/v1.3.0) · [完整 Release Notes](https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2/releases) · [CHANGELOG](./CHANGELOG.md)
 
 ## 🌐 跨平台支持 (Linux / macOS / Windows)
 
