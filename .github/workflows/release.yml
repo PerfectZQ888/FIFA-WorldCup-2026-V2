@@ -1,79 +1,132 @@
 # ============================================================
 # GitHub Actions: 自动 Release
-# 触发: push tag 匹配 v* (如 v1.3.0, v1.4.0, v2.0.0)
-# 作用: 自动创建 GitHub Release + 上传 source archives
+# 触发: 
+#   - push tag 匹配 v*.*.*  → 完整流程 (build + create release)
+#   - workflow_dispatch    → 只 build (不创建 release, 安全测试用)
+# 作用:
+#   1. 构建 Python 包 (sdist + wheel)
+#   2. 上传 artifacts (Actions 页可下载)
+#   3. 创建 GitHub Release (仅 tag push 触发)
 # ============================================================
 name: 🚀 Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'  # 匹配 v1.3.0, v1.3.1, v2.0.0 等
-  workflow_dispatch:  # 允许手动触发
+      - 'v*.*.*'  # 匹配 v1.3.0, v1.3.1, v2.0.0
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (只 build, 不发 release)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 permissions:
-  contents: write    # 创建 release 需要写权限
+  contents: write    # 创建 release 需要
 
 jobs:
-  release:
-    name: 📦 Build & Release
+  # ─── Job 1: Build (始终跑) ───
+  build:
+    name: 🏗️ Build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 拉全部历史 (auto-generated notes 需要)
+          fetch-depth: 0
       
-      - name: 🐍 设置 Python
+      - name: 🐍 设置 Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
-      - name: 🏗️ 构建源码包 (sdist + wheel)
+      - name: 📦 安装 build 工具
         run: |
-          python -m pip install --upgrade pip build
+          python -m pip install --upgrade pip
+          python -m pip install build
+      
+      - name: 🏗️ 构建 sdist + wheel
+        run: |
           python -m build --sdist --wheel --outdir dist/
-          ls -la dist/
+          echo "=== 构建产物 ==="
+          ls -lah dist/
+          echo "=== 文件信息 ==="
+          for f in dist/*; do
+            echo "$(basename $f): $(stat -c%s $f) bytes, sha256: $(sha256sum $f | cut -d' ' -f1)"
+          done
+      
+      - name: 📤 上传 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  # ─── Job 2: Release (只在 tag push 时跑) ───
+  release:
+    name: 🚀 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 📥 下载 build 产物
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist/
       
       - name: 📝 准备 release notes
-        id: notes
         run: |
-          # 自动从 commits + PRs 生成 notes
-          # 也可以用 ${{ github.event.release.body }} 从触发器传
-          cat > release_notes.md <<'NOTES'
-          ## 📦 自动 Release
+          # 从 git log 自动生成 notes
+          cat > release_notes.md <<NOTES_EOF
+          ## 📦 WorldCup 2026 V2 - ${{ github.ref_name }}
           
-          这个 release 由 GitHub Actions 自动创建。
-          
-          ### 变更内容
-          ${{ github.event.head_commit.message }}
+          发布时间: ${{ github.event.repository.updated_at }}
           
           ### 完整变更
-          查看 [commit 历史](${{ github.server_url }}/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.ref }})
+          查看完整 commit 历史: ${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }}
           
-          ### 资产
-          - `Source code (tar.gz)` / `Source code (zip)` - GitHub 自动生成
-          - `*.whl` - Python wheel 包 (`pip install`)
-          - `*.tar.gz` - Python source distribution
-          NOTES
-          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+          ### 安装
+          \`\`\`bash
+          # 源码
+          pip install FIFA-WorldCup-2026-V2-${{ github.ref_name }}.tar.gz
+          
+          # 或从 GitHub clone
+          git clone ${{ github.server_url }}/${{ github.repository }}.git
+          cd FIFA-WorldCup-2026-V2
+          git checkout ${{ github.ref_name }}
+          pip install -r backend/requirements.txt
+          \`\`\`
+          
+          ### 资产说明
+          - \`*.whl\` - Python wheel 包 (推荐, \`pip install\`)
+          - \`*.tar.gz\` - Python source distribution (sdist)
+          NOTES_EOF
       
       - name: 🚀 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "${{ github.ref_name }} - 自动 Release"
+          name: ${{ github.ref_name }}
           body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
-          generate_release_notes: true  # 用 GitHub 内置的 auto notes (从 PRs/commits 提取)
+          generate_release_notes: true  # 用 GitHub 内置 auto notes
           files: |
             dist/*.tar.gz
             dist/*.whl
-      
-      - name: 📢 通知 (可选)
-        if: success()
-        run: |
-          echo "✅ Release ${{ github.ref_name }} 已发布"
-          echo "🔗 ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
