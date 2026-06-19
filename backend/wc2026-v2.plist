@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  WorldCup 2026 Analytics Hub V2 - launchd 配置
+  端口: 8001 (V1 用 8000)
+  安装: ./install-service-macos.sh
+  卸载: ./uninstall-service-macos.sh
+  手动启停: launchctl load/unload ~/Library/LaunchAgents/com.wc2026-v2.plist
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wc2026-v2</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>python3</string>
+        <string>-m</string>
+        <string>uvicorn</string>
+        <string>app:app</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>8001</string>
+        <string>--workers</string>
+        <string>1</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/data/FIFA_WorldCup_2026_V2/backend</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>PYTHONPATH</key>
+        <string>/data/FIFA_WorldCup_2026_V2/backend</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+        <key>Crashed</key>
+        <true/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+
+    <key>StandardOutPath</key>
+    <string>/data/FIFA_WorldCup_2026_V2/backend/logs/v2.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/data/FIFA_WorldCup_2026_V2/backend/logs/v2.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>

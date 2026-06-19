@@ -1,5 +1,88 @@
 # 部署指南 - 2026 世界杯分析中心 V2 (独立版)
 
+
+## 🌐 跨平台部署说明
+
+### Windows 10/11 部署
+
+#### 前置准备
+1. **Python 3.11+** — https://www.python.org/downloads/ （勾 `Add to PATH`）
+2. **Git** (可选, 用于克隆) — https://git-scm.com/
+3. 克隆项目：
+   ```cmd
+   git clone https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2.git
+   cd FIFA-WorldCup-2026-V2
+   ```
+
+#### 临时启动
+```cmd
+start.bat
+```
+或 PowerShell（推荐，彩色输出）：
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start.ps1
+```
+
+#### 开机自启（用 Task Scheduler）
+
+1. 打开 **任务计划程序**（`taskschd.msc`）
+2. 点右栏 **创建任务**（不是"创建基本任务"）
+3. **常规** 选项卡：
+   - 名称: `WorldCup 2026 V2`
+   - 勾 **使用最高权限运行**
+4. **触发器** 选项卡 → 新建 → 选择 **登录时** → 确定
+5. **操作** 选项卡 → 新建：
+   - 程序: `cmd.exe`
+   - 参数: `/c start.bat`
+   - 起始位置: `C:\path\to\FIFA-WorldCup-2026-V2`  ← 改为你项目的实际路径
+6. **条件** 选项卡 → 取消 **"只有在使用交流电源时才启动"**
+7. **设置** 选项卡 → 勾 **"如果任务失败，按以下频率重新启动"** → 1分钟
+8. 点确定
+
+> 验证：重启电脑后看 `http://localhost:8001/` 是否能访问
+
+#### 防火墙
+如果 8001 端口从其他机器访问不到：
+```powershell
+New-NetFirewallRule -DisplayName "WC2026-V2" -Direction Inbound -LocalPort 8001 -Protocol TCP -Action Allow
+```
+
+---
+
+### macOS 部署
+
+#### 前置准备
+1. **Python 3.11+**（推荐 Homebrew 或 pyenv）
+   ```bash
+   brew install python@3.11
+   # 或
+   pyenv install 3.11 && pyenv global 3.11
+   ```
+2. 克隆项目：
+   ```bash
+   git clone https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2.git
+   cd FIFA-WorldCup-2026-V2
+   ```
+
+#### 临时启动
+```bash
+./start.sh
+```
+
+#### 开机自启（用 launchd）
+```bash
+./install-service-macos.sh
+```
+
+服务会写入 `~/Library/LaunchAgents/com.wc2026-v2.plist`，并立即启动 + 开机自启。
+
+卸载：
+```bash
+./uninstall-service-macos.sh
+```
+
+---
+
 ## 📦 项目结构
 
 ```
