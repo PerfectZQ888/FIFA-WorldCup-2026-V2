@@ -59,7 +59,16 @@ def parse_match(m: dict) -> dict:
     score = m.get("score") or {}
     ft = score.get("ft")
     ht = score.get("ht")
-    status = "finished" if ft else "scheduled"
+    # v2.1 修复: openfootball 上游只输出 'finished' / 'scheduled' 两种状态, 不会输出 'live'.
+    # 但进球列表 (goals1/goals2) 或半场比分 (ht) 已存在, 说明比赛正在进行, 推断为 'live'.
+    has_goals = bool(m.get("goals1") or m.get("goals2"))
+    has_score_partial = bool(ft or ht or score.get("i") or score.get("et") or score.get("pen"))
+    if ft:
+        status = "finished"
+    elif has_goals or has_score_partial:
+        status = "live"
+    else:
+        status = "scheduled"
 
     # Combine goals from both teams
     goals = []
@@ -142,6 +151,39 @@ def reap_stale_live(db: sqlite3.Connection, now: str | None = None) -> int:
     return reaped
 
 
+def promote_scheduled_to_live(db: sqlite3.Connection, now: str | None = None) -> int:
+    """Promote stale 'scheduled' matches to 'live' once kickoff time has passed.
+
+    配套 reap_stale_live() 的"反向"操作: 上游若漏标 'live' 状态, 靠开球时间兜底.
+    这样 /api/matches/live 不需要每次都做时间推断, DB 本身就是正确状态.
+    """
+    now_dt = datetime.fromisoformat(now) if now else datetime.now(timezone.utc)
+    rows = db.execute("""
+        SELECT match_id, match_date, match_time
+        FROM matches
+        WHERE status = 'scheduled' AND home_score IS NOT NULL
+    """).fetchall()
+    promoted = 0
+    for mid, date, time_str in rows:
+        if not date or not time_str:
+            continue
+        try:
+            kickoff = datetime.fromisoformat(f"{date}T{time_str}:00").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if now_dt < kickoff:
+            continue
+        db.execute("""
+            UPDATE matches SET status = 'live', last_updated = ?
+            WHERE match_id = ? AND status = 'scheduled'
+        """, (now_dt.isoformat(), mid))
+        if db.total_changes:
+            promoted += 1
+    if promoted:
+        db.commit()
+    return promoted
+
+
 def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
     """Write scraped match data to SQLite. Returns summary stats."""
     db = sqlite3.connect(db_path)
@@ -194,12 +236,18 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
             finished_added += 1
     db.commit()
 
-    # Stale-live reaper: if a match has been "live" past kickoff + 2.5h with no
-    # upstream update, freeze it at its current score and mark finished.
+    # 1) Stale-live reaper: if a match has been "live" past kickoff + 2.5h with no
+    #    upstream update, freeze it at its current score and mark finished.
     reaped = reap_stale_live(db, now=now)
     if reaped:
         finished_added += reaped
         updated += reaped
+
+    # 2) Scheduled → live promoter: 若 'scheduled' 比赛已过开球时间, 提升为 'live'
+    #    兜底: openfootball 上游漏标 live 也能在 DB 中体现, 下一轮 scraper 抓到 'ft' 时再升 'finished'.
+    promoted = promote_scheduled_to_live(db, now=now)
+    if promoted:
+        updated += promoted
 
     # Recompute standings
     from seed import compute_standings

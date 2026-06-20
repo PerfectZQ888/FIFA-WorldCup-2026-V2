@@ -314,16 +314,22 @@ async def matches(
 
 @app.get("/api/matches/live")
 async def matches_live() -> dict:
-    """Matches in next 24h + currently live (none yet, but framework)."""
+    """Matches in next 24h + currently live (status promoted by time-based inference).
+
+    v2.1 修复: 上游 openfootball scraper 只写 'scheduled'/'finished', 永远不会写 'live'.
+    若 DB 里的 'scheduled' 比赛已过开球时间, 这里用 _infer_live_status() 兜底提升为 'live';
+    超过 STALE_LIVE_WINDOW (2h) 仍未完赛则提升为 'finished'. 这与 openfootball_live.py 的
+    reap_stale_live() 行为一致, 但放在 API 端避免依赖定时器.
+    """
     conn = db()
-    now = datetime.now(timezone.utc).date()
-    until = (now + timedelta(days=1)).isoformat()
+    now_date = datetime.now(timezone.utc).date()
+    until = (now_date + timedelta(days=1)).isoformat()
     rows = conn.execute("""
         SELECT * FROM matches
         WHERE (status='scheduled' AND match_date BETWEEN ? AND ?)
            OR status='live'
         ORDER BY match_date, match_time
-    """, (now.isoformat(), until)).fetchall()
+    """, (now_date.isoformat(), until)).fetchall()
     out = []
     for r in rows:
         d = dict(r)
@@ -331,9 +337,43 @@ async def matches_live() -> dict:
             d["goals"] = json.loads(d.pop("goals_json") or "[]")
         except Exception:
             d["goals"] = []
+        # 兜底: 用开球时间推算 'live' / 'finished', 避免前端误判
+        d["status"] = _infer_live_status(d)
         out.append(d)
     conn.close()
     return {"count": len(out), "matches": out}
+
+
+# 与 scrapers/openfootball_live.py:STALE_LIVE_WINDOW 保持一致
+_STALE_LIVE_WINDOW = timedelta(hours=2)
+
+
+def _infer_live_status(m: dict) -> str:
+    """根据开球时间推断比赛状态 (兜底).
+
+    规则 (DB status 已是 'finished' / 'live' 则原样返回):
+      - 'scheduled' + 距开球 < 0                → 'scheduled'
+      - 'scheduled' + 0 <= 距开球 < 2h          → 'live'
+      - 'scheduled' + 距开球 >= 2h              → 'finished' (兜底, 等下次 scraper 校正)
+
+    时间字段 match_date (YYYY-MM-DD) + match_time (HH:MM, UTC) 直接拼 ISO, 附加 UTC tz.
+    """
+    raw = m.get("status") or "scheduled"
+    if raw in ("finished", "live"):
+        return raw
+    md, mt = m.get("match_date"), m.get("match_time")
+    if not md or not mt:
+        return raw
+    try:
+        kickoff = datetime.fromisoformat(f"{md}T{mt}:00").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return raw
+    delta = datetime.now(timezone.utc) - kickoff
+    if delta >= _STALE_LIVE_WINDOW:
+        return "finished"
+    if delta >= timedelta(0):
+        return "live"
+    return "scheduled"
 
 
 @app.get("/api/matches/{match_id}")

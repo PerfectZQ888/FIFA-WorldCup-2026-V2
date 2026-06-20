@@ -227,6 +227,51 @@
       <h2 data-i18n="sec.kpi">小组赛积分榜</h2>
       <span class="meta">前 2 名直接出线 · 8 个成绩最好的小组第 3 名晋级 32 强</span>
     </div>
+    <!-- 积分规则说明 (FIFA 官方 · 2026 世界杯 48 队赛制) -->
+    <details class="standings-rules" id="standingsRules" open>
+      <summary>
+        <span class="rules-ic">📖</span>
+        <span class="rules-title">积分规则说明</span>
+        <span class="rules-hint">点击收起 / 展开</span>
+      </summary>
+      <div class="rules-grid">
+        <div class="rule-card rule-pts">
+          <div class="rule-ic">⚽</div>
+          <div class="rule-name">比赛得分</div>
+          <ul class="rule-list">
+            <li><span class="badge-win">胜</span> 得 <b>3</b> 分</li>
+            <li><span class="badge-draw">平</span> 得 <b>1</b> 分</li>
+            <li><span class="badge-lose">负</span> 得 <b>0</b> 分</li>
+          </ul>
+          <div class="rule-foot">常规时间 90 分钟结果 (含补时, 不含点球大战)</div>
+        </div>
+        <div class="rule-card rule-rank">
+          <div class="rule-ic">📊</div>
+          <div class="rule-name">同分排名规则</div>
+          <ol class="rule-list rule-list-ordered">
+            <li>积分 (Pts) 高者靠前</li>
+            <li>净胜球 (GD) 高者靠前</li>
+            <li>进球数 (GF) 多者靠前</li>
+            <li>相互战绩 (H2H) 较优者</li>
+            <li>公平竞赛分 (红黄牌少)</li>
+            <li>FIFA 抽签</li>
+          </ol>
+          <div class="rule-foot">依 FIFA 官方条例 · 第 3 章第 21 条</div>
+        </div>
+        <div class="rule-card rule-qual">
+          <div class="rule-ic">🏆</div>
+          <div class="rule-name">出线规则 (2026 新规)</div>
+          <ul class="rule-list">
+            <li>各小组 <b>前 2 名</b> 直接晋级 32 强</li>
+            <li>8 个成绩最好的 <b>小组第 3 名</b> 也晋级</li>
+            <li>共 12 × 2 + 8 = <b>32 队</b> 进入淘汰赛</li>
+            <li>剩余 4 个第 3 名淘汰</li>
+          </ul>
+          <div class="rule-foot">2026 美加墨世界杯首次采用 48 队 32 强赛制</div>
+        </div>
+      </div>
+    </details>
+
     <div class="standings-grid" id="standingsGrid">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>

@@ -477,6 +477,98 @@ section { margin-bottom: 48px; }
 .standings-grid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
 }
+/* =========================================================
+   积分榜规则说明卡 (v2.1 新增)
+   ========================================================= */
+.standings-rules {
+  margin: 0 0 18px;
+  background: linear-gradient(135deg, rgba(255,214,64,0.05) 0%, rgba(0,214,143,0.04) 100%);
+  border: 1px solid rgba(255,214,64,0.18);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.standings-rules:hover { border-color: rgba(255,214,64,0.32); }
+.standings-rules > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+  font-size: 13px;
+  color: var(--text-dim);
+  transition: background 0.15s;
+}
+.standings-rules > summary::-webkit-details-marker { display: none; }
+.standings-rules > summary:hover { background: rgba(255,255,255,0.02); }
+.standings-rules > summary::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--text-mute);
+  transition: transform 0.2s;
+}
+.standings-rules:not([open]) > summary::after { transform: rotate(-90deg); }
+.standings-rules .rules-ic { font-size: 16px; }
+.standings-rules .rules-title { color: var(--gold-2); font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+.standings-rules .rules-hint { font-size: 11px; color: var(--text-mute); }
+
+.standings-rules .rules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 6px 18px 18px;
+}
+.standings-rules .rule-card {
+  background: rgba(7, 17, 30, 0.55);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+}
+.standings-rules .rule-card.rule-pts { border-left: 3px solid var(--green); }
+.standings-rules .rule-card.rule-rank { border-left: 3px solid #4dabff; }
+.standings-rules .rule-card.rule-qual { border-left: 3px solid var(--gold-2); }
+
+.standings-rules .rule-ic { font-size: 20px; margin-bottom: 6px; }
+.standings-rules .rule-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: 0.5px; }
+.standings-rules .rule-list { list-style: none; padding: 0; margin: 0; font-size: 12px; line-height: 1.9; color: var(--text-dim); }
+.standings-rules .rule-list-ordered { padding-left: 20px; list-style: decimal; }
+.standings-rules .rule-list li { display: flex; align-items: center; gap: 8px; }
+.standings-rules .rule-list-ordered li { display: list-item; padding-left: 4px; }
+.standings-rules .rule-list b { color: var(--gold-2); font-variant-numeric: tabular-nums; }
+.standings-rules .rule-foot {
+  margin-top: 10px;
+  font-size: 10.5px;
+  color: var(--text-mute);
+  border-top: 1px dashed rgba(255,255,255,0.06);
+  padding-top: 8px;
+  line-height: 1.5;
+}
+
+.standings-rules .badge-win,
+.standings-rules .badge-draw,
+.standings-rules .badge-lose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 4px;
+  color: #07111e;
+}
+.standings-rules .badge-win  { background: var(--green); }
+.standings-rules .badge-draw { background: #ffd644; }
+.standings-rules .badge-lose { background: #ff6b6b; color: #fff; }
+
+@media (max-width: 980px) {
+  .standings-rules .rules-grid { grid-template-columns: 1fr; }
+}
+
 .group-card {
   background: var(--panel-2);
   border: 1px solid var(--border);
