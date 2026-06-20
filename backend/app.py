@@ -314,22 +314,26 @@ async def matches(
 
 @app.get("/api/matches/live")
 async def matches_live() -> dict:
-    """Matches in next 24h + currently live (status promoted by time-based inference).
+    """Matches in next 24h + currently live + recently kicked-off (last 6h).
 
-    v2.1 修复: 上游 openfootball scraper 只写 'scheduled'/'finished', 永远不会写 'live'.
-    若 DB 里的 'scheduled' 比赛已过开球时间, 这里用 _infer_live_status() 兜底提升为 'live';
-    超过 STALE_LIVE_WINDOW (2h) 仍未完赛则提升为 'finished'. 这与 openfootball_live.py 的
-    reap_stale_live() 行为一致, 但放在 API 端避免依赖定时器.
+    v2.1 修复 (date range):
+      原 SQL 只查 match_date IN [今天, 明天], 会漏掉"昨天开赛但刚结束"的比赛
+      (e.g. M016 巴拉圭 vs 土耳其 2026-06-19 23:00 UTC). 现扩展窗口:
+        - 已开赛 ≤ 6h  (status='live' 或 'finished')
+        - match_date 范围 [昨天, 明天+1]
+      然后 _infer_live_status() 把 status='scheduled' 但已过开球时间的提升为 'live'/'finished'.
     """
     conn = db()
-    now_date = datetime.now(timezone.utc).date()
-    until = (now_date + timedelta(days=1)).isoformat()
+    now = datetime.now(timezone.utc)
+    # 6h 前 (含跨日, 最多回看 1 天)
+    window_start = (now - timedelta(hours=6)).date()
+    window_end = (now + timedelta(days=1)).date()
     rows = conn.execute("""
         SELECT * FROM matches
-        WHERE (status='scheduled' AND match_date BETWEEN ? AND ?)
+        WHERE match_date BETWEEN ? AND ?
            OR status='live'
         ORDER BY match_date, match_time
-    """, (now_date.isoformat(), until)).fetchall()
+    """, (window_start.isoformat(), window_end.isoformat())).fetchall()
     out = []
     for r in rows:
         d = dict(r)
