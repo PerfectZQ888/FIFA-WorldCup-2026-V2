@@ -540,9 +540,36 @@ def run_once() -> dict | None:
     res = upsert_matches(matches)
     res["source"] = src
     res["fetched"] = len(matches)
+
+    # v2.1 修复: CCTV 窗口只覆盖 today-1 ~ today+7, 超出此范围的 'live' 比赛 (如 seed 写错 /
+    # openfootball scraper 漏标) 永远不会被 reap. 这里在 CCTV run 末尾统一跑一次 reaper.
+    # 调用 openfootball 的 reap/promote (它们是时间推断, 不依赖上游状态).
+    try:
+        from scrapers.openfootball_live import reap_stale_live, promote_scheduled_to_live
+        # 用刚 upsert 的 db 连接 (避免锁竞争)
+        reap_db = sqlite3.connect(str(DB_PATH))
+        try:
+            reap_now = datetime.now(timezone.utc).isoformat()
+            reaped = reap_stale_live(reap_db, now=reap_now)
+            promoted = promote_scheduled_to_live(reap_db, now=reap_now)
+            res["reaped"] = reaped
+            res["promoted"] = promoted
+            if reaped or promoted:
+                print(f"[scraper] reaper: reaped={reaped} promoted={promoted}")
+                # 重算 standings (因为 reaped 的比赛从 'live' 变 'finished' 会影响积分)
+                from seed import compute_standings
+                compute_standings(reap_db)
+        finally:
+            reap_db.close()
+    except Exception as e:
+        print(f"[scraper] reaper skipped: {e}")
+        res["reaped"] = 0
+        res["promoted"] = 0
+
     print(f"[scraper] source={src} fetched={len(matches)} "
           f"matched={res['matched']} inserted={res['inserted']} updated={res['updated']} "
           f"newly_finished={res['newly_finished']} "
+          f"reaped={res.get('reaped',0)} promoted={res.get('promoted',0)} "
           f"skipped_no_db={res['skipped_no_db']} "
           f"skipped_finished_downgrade={res['skipped_finished_downgrade']}")
     return res
