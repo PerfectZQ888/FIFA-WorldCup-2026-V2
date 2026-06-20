@@ -86,11 +86,19 @@ async def lifespan(app: FastAPI):
 
 
 def run_prediction_job() -> None:
-    """Recompute and persist champion predictions."""
+    """Recompute and persist predictions: champion + per-match (group + knockout).
+
+    v2.1 修复: 之前只算冠军预测 (写 predictions 表), 从不写单场 predicted_winner /
+    predicted_home_score 等字段到 matches 表. 结果 accuracy 仪表盘 / hit highlights
+    模块全空 (filter 把所有 predicted_winner IS NULL 的比赛过滤掉).
+    修复: 调 compute_and_persist_all() 完整 pipeline (MC + 单场 group + knockout).
+    """
     try:
-        preds = analyzer.compute_predictions()
-        analyzer.persist_predictions(preds)
-        print(f"[{datetime.now(timezone.utc).isoformat()}] predictions refreshed")
+        result = analyzer.compute_and_persist_all()
+        print(f"[{datetime.now(timezone.utc).isoformat()}] predictions refreshed: "
+              f"{result.get('match_predictions_written', 0)} match predictions, "
+              f"{result.get('team_predictions', 0)} team predictions, "
+              f"{result.get('iterations', 0)} MC iterations")
     except Exception as e:
         print(f"prediction job failed: {e}")
 
