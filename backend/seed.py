@@ -133,6 +133,35 @@ CREATE TABLE venues (
     city    TEXT,
     country TEXT
 );
+
+-- v2.1: 第三方比赛 ID 映射
+--   cctv_game_id  : CCTV 体育 gameId (22920301) — 中文比赛源
+--   espn_event_id : ESPN event id (760415) — 阵容 / 详细数据源
+CREATE TABLE external_ids (
+    match_id       TEXT PRIMARY KEY REFERENCES matches(match_id),
+    cctv_game_id   INTEGER UNIQUE,
+    espn_event_id  TEXT UNIQUE,
+    cctv_synced_at TEXT,
+    espn_synced_at TEXT
+);
+
+-- v2.1: 阵容数据 (按 match_id + side 存)
+--   side           : 'home' / 'away'
+--   formation      : '4-3-3' / '4-4-2' 等
+--   coach_name     : 主教练
+--   players_json   : JSON, [{jersey, name, position, starter, formationPlace, athlete_id, subbed_in_min, subbed_out_min}, ...]
+--   source         : 'espn' / 'cctv-html' (数据源)
+--   fetched_at     : 最后抓取时间
+CREATE TABLE lineups (
+    match_id      TEXT REFERENCES matches(match_id),
+    side          TEXT CHECK(side IN ('home', 'away')),
+    formation     TEXT,
+    coach_name    TEXT,
+    players_json  TEXT,
+    source        TEXT DEFAULT 'espn',
+    fetched_at    TEXT,
+    PRIMARY KEY (match_id, side)
+);
 """
 
 

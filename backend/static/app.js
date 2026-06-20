@@ -1448,10 +1448,189 @@ async function showMatchDetail(matchId) {
       
       ${renderGoalsTimeline(m)}
       ${renderScoreDistribution(m, isExact)}
+      ${renderLineupSection(m.match_id)}
     `;
+
+    // 异步拉阵容 (不阻塞 modal 主显示)
+    loadLineup(m.match_id, homeCn, awayCn, homeFlag, awayFlag);
   } catch (e) {
     body.innerHTML = `<div class="dist-empty" style="color:#ff8a9e">❌ 加载失败: ${e.message}</div>`;
   }
+}
+
+// ============================================================
+// v2.1: 阵容 (lineup) 显示
+// ============================================================
+function renderLineupSection(matchId) {
+  // 占位: 由 loadLineup() 异步填充
+  return `
+    <div class="lineup-section" id="lineup-${matchId}">
+      <div class="lineup-section-head">
+        <span class="lineup-ic">⚽</span>
+        <span class="lineup-title">首发阵容</span>
+        <span class="lineup-hint">点击展开</span>
+      </div>
+      <div class="lineup-loading">⏳ 加载中...</div>
+    </div>
+  `;
+}
+
+async function loadLineup(matchId, homeCn, awayCn, homeFlag, awayFlag) {
+  const el = document.getElementById(`lineup-${matchId}`);
+  if (!el) return;
+  try {
+    const r = await fetch(`/api/matches/${matchId}/lineup`);
+    if (r.status === 404) {
+      el.innerHTML = `
+        <div class="lineup-section-head">
+          <span class="lineup-ic">⚽</span>
+          <span class="lineup-title">首发阵容</span>
+          <span class="lineup-hint">尚未公布</span>
+        </div>
+        <div class="lineup-empty">尚未公布 (CCTV 赛前 1h / 赛中 公布)</div>
+      `;
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    el.innerHTML = `
+      <div class="lineup-section-head" data-lineup-toggle>
+        <span class="lineup-ic">⚽</span>
+        <span class="lineup-title">首发阵容</span>
+        <span class="lineup-source">来源: ESPN</span>
+        <span class="lineup-hint">点击收起 / 展开</span>
+      </div>
+      <div class="lineup-grid">
+        ${renderLineupTeam('home', homeCn, homeFlag, d.home)}
+        ${renderLineupTeam('away', awayCn, awayFlag, d.away)}
+      </div>
+    `;
+    // 折叠交互
+    el.querySelector('[data-lineup-toggle]')?.addEventListener('click', () => {
+      el.classList.toggle('collapsed');
+    });
+  } catch (e) {
+    el.innerHTML = `
+      <div class="lineup-section-head">
+        <span class="lineup-ic">⚽</span>
+        <span class="lineup-title">首发阵容</span>
+        <span class="lineup-hint">加载失败</span>
+      </div>
+      <div class="lineup-empty">❌ 加载失败: ${e.message}</div>
+    `;
+  }
+}
+
+function renderLineupTeam(side, teamCn, flag, lu) {
+  if (!lu || !lu.players || !lu.players.length) {
+    return `<div class="lineup-team lineup-${side}">
+      <div class="lineup-team-head">
+        <span class="flag">${flag}</span>
+        <span class="name">${teamCn}</span>
+      </div>
+      <div class="lineup-empty">阵容数据不可用</div>
+    </div>`;
+  }
+  const starters = lu.players.filter(p => p.starter);
+  const subs = lu.players.filter(p => !p.starter);
+  // 阵型 4-3-3 → 4 3 3 数字
+  const formationNums = (lu.formation || '').split('-').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+
+  return `<div class="lineup-team lineup-${side}">
+    <div class="lineup-team-head">
+      <span class="flag">${flag}</span>
+      <span class="name">${teamCn}</span>
+      <span class="formation">${lu.formation || '?'}</span>
+      <span class="coach">主帅: ${lu.coach || '—'}</span>
+    </div>
+
+    <!-- 球场可视化 -->
+    <div class="lineup-pitch">
+      <div class="lineup-pitch-lines">
+        <div class="lineup-pitch-center-circle"></div>
+        <div class="lineup-pitch-center-line"></div>
+        <div class="lineup-pitch-penalty-top"></div>
+        <div class="lineup-pitch-penalty-bot"></div>
+      </div>
+      ${renderPitchPlayers(starters, formationNums, side)}
+    </div>
+
+    <div class="lineup-starters-list">
+      <div class="lineup-list-head">首发 (${starters.length})</div>
+      ${starters.map(p => `
+        <div class="lineup-player ${p.starter ? 'is-starter' : 'is-sub'}">
+          <span class="lp-jersey">${p.jersey || '-'}</span>
+          <span class="lp-name">${p.name}</span>
+          <span class="lp-pos">${p.position || ''}</span>
+        </div>
+      `).join('')}
+    </div>
+
+    ${subs.length ? `
+    <details class="lineup-subs">
+      <summary>替补 (${subs.length})</summary>
+      <div class="lineup-subs-list">
+        ${subs.map(p => `
+          <div class="lineup-player is-sub">
+            <span class="lp-jersey">${p.jersey || '-'}</span>
+            <span class="lp-name">${p.name}</span>
+            <span class="lp-pos">${p.position || ''}</span>
+          </div>
+        `).join('')}
+      </div>
+    </details>
+    ` : ''}
+  </div>`;
+}
+
+function renderPitchPlayers(starters, formationNums, side) {
+  // 阵型可视化: 4-3-3 → [GK, 4 defenders, 3 mids, 3 fwds]
+  // 守门员在最底 (主队) 或最顶 (客队), 然后倒序
+  // 11 = 1 GK + formationNums 之和
+  // 渲染行: formationNums + 1
+  if (!formationNums.length || !starters.length) {
+    // 退化为单行
+    return `<div class="lineup-pitch-row" style="bottom:10%">
+      ${starters.map(p => `<div class="lineup-pitch-player" title="#${p.jersey} ${p.name}">
+        <div class="lpp-num">${p.jersey || '-'}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+  const totalOutfield = formationNums.reduce((a,b)=>a+b, 0);
+  if (totalOutfield + 1 !== starters.length) {
+    // 阵型数字和首发数不匹配
+    return `<div class="lineup-pitch-row" style="bottom:10%">
+      ${starters.map(p => `<div class="lineup-pitch-player" title="#${p.jersey} ${p.name}">
+        <div class="lpp-num">${p.jersey || '-'}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+  // 按 formationPlace 排序
+  const sorted = [...starters].sort((a,b) => (a.formation_place||0) - (b.formation_place||0));
+  // GK + formation 行 (从守门员到前场)
+  const rows = [];
+  // GK (formation_place=1) 放最底
+  rows.push([sorted[0]]);
+  // formation 倒序放: 4-3-3 实际是 3 前 / 3 中 / 4 后 / 1 GK
+  // 所以 rows = [GK, 4 defenders, 3 mids, 3 fwds] (从下到上)
+  // 实际按 formationPlace: 1=GK, 2-5=defenders, 6-8=mids, 9-11=fwds
+  let idx = 1;
+  for (let i = formationNums.length - 1; i >= 0; i--) {
+    const count = formationNums[i];
+    rows.push(sorted.slice(idx, idx + count));
+    idx += count;
+  }
+  // 渲染: row 0 (GK) 在最底, row 1+ 向上
+  // 球场从底到顶: 0%, 20%, 40%, 60%, 80% (depending on rows)
+  const totalRows = rows.length;
+  return rows.map((row, rowIdx) => {
+    const bottomPct = rowIdx === 0 ? 5 : 5 + rowIdx * (90 / totalRows);
+    return `<div class="lineup-pitch-row" style="bottom:${bottomPct}%">
+      ${row.map(p => `<div class="lineup-pitch-player" title="#${p.jersey} ${p.name}">
+        <div class="lpp-num">${p.jersey || '-'}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
 }
 
 function renderVerdictBadge(m, actual, isHit, isExact) {

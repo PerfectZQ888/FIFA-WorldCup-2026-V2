@@ -46,6 +46,7 @@ from fastapi.staticfiles import StaticFiles
 import analyzer
 from scrapers import cctv_espn_live
 from scrapers import cctv_scorers
+from scrapers import lineup as lineup_scraper  # v2.1: 阵容抓取 (ESPN)
 
 BASE_DIR = Path(__file__).parent
 DB_PATH = BASE_DIR / "data" / "wc2026.db"
@@ -77,6 +78,8 @@ async def lifespan(app: FastAPI):
     scheduler.add_job(run_live_fetch_job, "interval", seconds=60, next_run_time=datetime.now(timezone.utc))
     # Top-scorer refresh every 5 min — CCTV updates less often than match data
     scheduler.add_job(run_scorer_refresh_job, "interval", minutes=5, next_run_time=datetime.now(timezone.utc))
+    # v2.1: 阵容刷新每 3 分钟 (赛前 2h 内 + 赛中)
+    scheduler.add_job(run_lineup_fetch_job, "interval", minutes=3, next_run_time=datetime.now(timezone.utc))
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -93,6 +96,21 @@ def run_prediction_job() -> None:
 
 
 LIVE_LAST_RUN: dict = {"ts": None, "updated": 0, "ok": False, "error": None}
+LINEUP_LAST_RUN: dict = {"ts": None, "stored": 0, "candidates": 0, "ok": False}
+
+
+def run_lineup_fetch_job() -> None:
+    """v2.1: 抓取阵容 (赛前 2h 内 + 赛中), 每 3 分钟. ESPN 阵容赛前 ~1h 公布."""
+    try:
+        result = lineup_scraper.fetch_and_store_lineups()
+        LINEUP_LAST_RUN["ts"] = datetime.now(timezone.utc).isoformat()
+        LINEUP_LAST_RUN["candidates"] = result.get("candidates", 0)
+        LINEUP_LAST_RUN["stored"] = result.get("stored", 0)
+        LINEUP_LAST_RUN["ok"] = True
+    except Exception as e:
+        LINEUP_LAST_RUN["ok"] = False
+        LINEUP_LAST_RUN["ts"] = datetime.now(timezone.utc).isoformat()
+        print(f"lineup fetch job failed: {e}")
 
 
 def run_live_fetch_job() -> None:
@@ -393,6 +411,46 @@ async def match_detail(match_id: str) -> dict:
     except Exception:
         d["goals"] = []
     return d
+
+
+# ── v2.1: 阵容 (lineup) 端点 ────────────────────────────────────────────────
+@app.get("/api/matches/{match_id}/lineup")
+async def match_lineup(match_id: str) -> dict:
+    """Return lineups for a match: {home: {formation, coach, players[]}, away: {...}}.
+
+    数据源: ESPN summary API. 写库逻辑: scrapers/lineup.py.
+    通常赛前 1h 公布; 已完赛的比赛一次性回填.
+    """
+    conn = db()
+    rows = conn.execute(
+        "SELECT side, formation, coach_name, players_json, source, fetched_at FROM lineups WHERE match_id=?",
+        (match_id,),
+    ).fetchall()
+    if not rows:
+        conn.close()
+        raise HTTPException(404, "lineup not yet available (尚未公布或不在 ESPN 列表)")
+    out: dict = {"match_id": match_id, "home": None, "away": None}
+    for side, formation, coach, pjson, source, fetched_at in rows:
+        try:
+            players = json.loads(pjson or "[]")
+        except Exception:
+            players = []
+        out[side] = {
+            "formation": formation,
+            "coach": coach,
+            "players": players,
+            "source": source,
+            "fetched_at": fetched_at,
+        }
+    conn.close()
+    return out
+
+
+@app.post("/api/admin/refresh_lineups")
+async def refresh_lineups() -> dict:
+    """手动触发阵容刷新. 用于测试或紧急情况."""
+    stats = lineup_scraper.fetch_and_store_lineups()
+    return {"ok": True, **stats}
 
 
 # ── v4 — per-match AI prediction endpoint ──────────────────────────────────────

@@ -1772,6 +1772,208 @@ section, .panel, .kpi, .group-card, .match-row, .live-card {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
 }
+
+/* =========================================================
+   v2.1: 阵容 (lineup) 区域样式
+   ========================================================= */
+.lineup-section {
+  margin: 24px 0 12px;
+  background: rgba(7, 17, 30, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.lineup-section-head {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.15);
+  transition: background 0.15s;
+}
+.lineup-section-head:hover { background: rgba(255,255,255,0.02); }
+.lineup-section.collapsed .lineup-grid { display: none; }
+.lineup-section.collapsed .lineup-section-head { border-bottom: none; }
+.lineup-section.collapsed .lineup-section-head::after {
+  content: "▾";
+  margin-left: auto;
+  transform: rotate(-90deg);
+  transition: transform 0.2s;
+}
+.lineup-section:not(.collapsed) .lineup-section-head::after {
+  content: "▾";
+  margin-left: auto;
+  color: var(--text-mute);
+  font-size: 14px;
+}
+.lineup-ic { font-size: 16px; }
+.lineup-title { color: var(--green); font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+.lineup-source, .lineup-hint {
+  font-size: 10.5px; color: var(--text-mute); margin-left: auto;
+}
+.lineup-source { margin-left: 4px; }
+.lineup-hint { margin-left: 4px; }
+.lineup-loading, .lineup-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-mute);
+  font-size: 13px;
+}
+.lineup-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: rgba(255,255,255,0.04);
+}
+@media (max-width: 720px) {
+  .lineup-grid { grid-template-columns: 1fr; }
+}
+.lineup-team {
+  background: rgba(7, 17, 30, 0.6);
+  padding: 14px;
+}
+.lineup-team-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(255,255,255,0.08);
+  font-size: 13px;
+}
+.lineup-team-head .flag { font-size: 20px; }
+.lineup-team-head .name { color: var(--text); font-weight: 700; }
+.lineup-team-head .formation {
+  background: var(--green);
+  color: #07111e;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: auto;
+}
+.lineup-team-head .coach { font-size: 11px; color: var(--text-mute); margin-left: 8px; }
+
+/* 球场可视化 */
+.lineup-pitch {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  background:
+    radial-gradient(ellipse at center, #2d6e3e 0%, #1e5230 70%, #0e3520 100%);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.lineup-pitch-lines {
+  position: absolute; inset: 0; pointer-events: none;
+}
+.lineup-pitch-center-line {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  border-top: 1px solid rgba(255,255,255,0.25);
+}
+.lineup-pitch-center-circle {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 60px; height: 60px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 50%;
+}
+.lineup-pitch-penalty-top, .lineup-pitch-penalty-bot {
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  width: 100px; height: 35px;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+.lineup-pitch-penalty-top { top: 0; border-top: none; }
+.lineup-pitch-penalty-bot { bottom: 0; border-bottom: none; }
+.lineup-pitch-row {
+  position: absolute;
+  left: 0; right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  transform: translateY(50%);
+}
+.lineup-pitch-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+.lpp-num {
+  width: 24px; height: 24px;
+  background: rgba(0,0,0,0.5);
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lineup-pitch-player:hover .lpp-num {
+  background: var(--gold-2);
+  color: #07111e;
+}
+
+/* 球员列表 */
+.lineup-starters-list, .lineup-subs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.lineup-list-head {
+  font-size: 10.5px;
+  color: var(--text-mute);
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.lineup-player {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  align-items: center;
+}
+.lineup-player:hover { background: rgba(255,255,255,0.03); }
+.lineup-player.is-sub { opacity: 0.7; }
+.lp-jersey {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-2);
+  font-weight: 700;
+  text-align: center;
+}
+.lp-name { color: var(--text); }
+.lp-pos { color: var(--text-mute); font-size: 10.5px; }
+
+.lineup-subs {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255,255,255,0.06);
+}
+.lineup-subs > summary {
+  cursor: pointer;
+  font-size: 10.5px;
+  color: var(--text-mute);
+  padding: 4px 0;
+  list-style: none;
+}
+.lineup-subs > summary::before { content: "▶ "; font-size: 8px; }
+.lineup-subs[open] > summary::before { content: "▼ "; }
+.lineup-subs-list { padding: 6px 0; }
+
 .modal-meta-item {
   text-align: center;
 }

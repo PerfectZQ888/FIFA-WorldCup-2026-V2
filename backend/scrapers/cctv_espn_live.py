@@ -98,7 +98,9 @@ def fetch_cctv_daily(start: str, end: str) -> list[dict]:
     """Fetch CCTV schedule+scores for a date range. start/end are 'YYYY-MM-DD' (CST)."""
     url = _cctv_daily_url(start, end, int(time.time() * 1000))
     try:
-        r = httpx.get(url, timeout=TIMEOUT, headers={"User-Agent": UA, "Referer": "https://worldcup.cctv.com/2026/schedule/index.shtml"})
+        # CCTV 走 302 → cbs-i 缓存, 必须 follow_redirects=True (v2.1 修复)
+        r = httpx.get(url, timeout=TIMEOUT, follow_redirects=True,
+                      headers={"User-Agent": UA, "Referer": "https://worldcup.cctv.com/2026/schedule/index.shtml"})
         r.raise_for_status()
         data = r.json()
     except Exception as e:
@@ -115,7 +117,9 @@ def fetch_cctv_live_status() -> dict[int, dict]:
     """Hit JSONP live-status endpoint. Returns {match_id: minimal_status_dict}."""
     url = _cctv_status_url(int(time.time() * 1000))
     try:
-        r = httpx.get(url, timeout=TIMEOUT, headers={"User-Agent": UA, "Referer": "https://worldcup.cctv.com/2026/schedule/index.shtml"})
+        # CCTV 走 302 → cbs-i 缓存, 必须 follow_redirects=True (v2.1 修复)
+        r = httpx.get(url, timeout=TIMEOUT, follow_redirects=True,
+                      headers={"User-Agent": UA, "Referer": "https://worldcup.cctv.com/2026/schedule/index.shtml"})
         r.raise_for_status()
     except Exception as e:
         print(f"[cctv] live status fetch failed: {e}")
