@@ -5,6 +5,35 @@
 > 💡 **完整 release notes** 在 [`RELEASE_NOTES/`](./RELEASE_NOTES/) 目录。
 > 🌐 **GitHub Releases** 见 https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2/releases
 
+## [v1.4.0] - 2026-06-30
+
+### ✨ Added (新功能)
+- **点球大战 (Penalty Shootout) 完整支持**
+  - Schema: `matches` 加 3 列 (`home_pen_score` / `away_pen_score` / `decided_by_penalties`)
+  - Schema: `bracket` 加 1 列 (`winner_via_penalties`)
+  - 启动时自动 `migrate_db()` (idempotent, 已存在的列不重复加)
+  - Scraper: `fetch_espn_shootout(espn_id)` 解析 ESPN summary 中 "Penalty Shootout ends, ..." 文本
+  - 触发条件: 比赛 status = `FT-Pens` → 自动补抓 summary → 写 home/away_pen_score
+  - Regex 测试通过 WC 2022 真实点球比赛 (Croatia 4-2 Brazil, Argentina 4-3 Netherlands, 等)
+  - 手动补录端点: `POST /api/admin/matches/{id}/shootout` (Pydantic 校验 home/away_pen_score 0-20)
+  - 自动同步 `bracket.winner` (从占位 → 实际赢家) + `bracket.winner_via_penalties=1`
+
+### 🔄 Changed
+- `/api/matches` / `/api/matches/{id}` / `/api/matches/live`: 自动输出新字段 (用 `SELECT *`)
+- `/api/knockout` / `/api/bracket`: SELECT 显式列新字段, 节点 dict 注入 `shootout_score` 等
+- 前端: 比赛详情弹窗显示 "⚽ 点球大战 X : Y" 渐变徽章
+- 前端: 比赛列表卡已完赛比赛加 "⚽点球 X:Y" 角标
+- 前端: bracket 卡片显示实际比分 + "(点球)" 角标, tooltip 加 "点球大战 X-Y 晋级" 行
+- CSS: `.shootout-badge` / `.shootout-score` / `.pk-inline` / `.shootout-tag` 4 个新样式
+
+### 📦 Stats
+- Files: 6 modified (app.py, cctv_espn_live.py, app.js, bracket.js, style.css, bracket.css)
+- 代码: +378 / -14 行
+- API 字段: +6 (matches 3, bracket 1, bracket-node 2)
+- 新端点: 1 (`POST /api/admin/matches/{id}/shootout`)
+
+---
+
 ## [v1.3.0] - 2026-06-19
 
 ### ✨ Added (新功能)

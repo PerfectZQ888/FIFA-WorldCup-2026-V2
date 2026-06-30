@@ -206,6 +206,11 @@ def fetch_espn_day(date_yyyymmdd: str) -> list[dict]:
         except Exception:
             kickoff = None
             local = None
+        # v1.4.0: 标记是否点球大战 (ESPN status id "STATUS_FINAL_PEN" / shortDetail "FT-Pens")
+        is_shootout = (
+            status_id == "STATUS_FINAL_PEN"
+            or status_type.get("shortDetail") == "FT-Pens"
+        )
         out.append({
             "source": "espn",
             "espn_id": ev.get("id"),
@@ -221,6 +226,11 @@ def fetch_espn_day(date_yyyymmdd: str) -> list[dict]:
             "group": "",
             "round": "",
             "venue": (comp.get("venue") or {}).get("fullName") or "",
+            # v1.4.0: 点球大战字段 (默认 None / 0; 如果 is_shootout, fetch_espn_shootout 补)
+            "home_pen_score": None,
+            "away_pen_score": None,
+            "decided_by_penalties": 0,
+            "_is_shootout": is_shootout,  # private flag, 触发补抓 summary
         })
     return out
 
@@ -238,6 +248,106 @@ def _espn_status(status_id: str) -> str:
     if "Scheduled" in status_id:
         return "scheduled"
     return "scheduled"
+
+
+# ── v1.4.0 — penalty shootout (点球大战) parsing ──────────────────────────────
+# ESPN 比赛 detail 文本格式: "Penalty Shootout ends, TEAM1 REG(SHOOT), TEAM2 REG(SHOOT)."
+# e.g. "Penalty Shootout ends, Croatia 1(4), Brazil 1(2)." → Croatia 1-1 Brazil, shootout 4-2
+# 用 regex 拆 team 名 + 常规分 + 点球分. team 名可能含空格 / 数字 (e.g. "South Korea"),
+# 用 ([\w .&'\-]+?) 懒惰匹配.
+_SHOOTOUT_END_RE = __import__("re").compile(
+    r"Penalty Shootout ends,\s*"
+    r"(?P<t1>[\w .&'\-]+?)\s+(?P<r1>\d+)\((?P<s1>\d+)\),\s*"
+    r"(?P<t2>[\w .&'\-]+?)\s+(?P<r2>\d+)\((?P<s2>\d+)\)\."
+)
+
+
+def fetch_espn_shootout(espn_id: str) -> tuple[int | None, int | None, int]:
+    """Fetch penalty shootout score from ESPN summary endpoint.
+
+    Returns (home_pen_score, away_pen_score, decided_by_penalties) where
+    the *home/away* orientation is the ESPN scoreboard's home/away (NOT
+    the DB's). Callers must apply home/away swap logic if needed.
+
+    decided_by_penalties is 1 if the match was decided on penalties, 0 otherwise.
+
+    Strategy:
+      1) GET /summary?event={espn_id}
+      2) Find "Penalty Shootout ends, ..." in header.competitions[0].keyEvents
+      3) If not found, walk commentary[] for the same line (some events
+         only have it there)
+      4) Return parsed tuple; (None, None, 0) on any failure
+
+    Cost: 1 extra HTTP call per finished shootout match. Called only when
+    fetch_espn_day flags _is_shootout=True, so the extra load is bounded
+    by "max shootout matches in a day" (typically 0-2).
+    """
+    if not espn_id:
+        return None, None, 0
+    url = f"{ESPN_BASE}/summary?event={espn_id}"
+    try:
+        r = httpx.get(url, timeout=TIMEOUT, headers={"User-Agent": UA})
+        r.raise_for_status()
+        data = r.json()
+    except Exception as e:
+        print(f"[espn] shootout fetch failed for {espn_id}: {e}")
+        return None, None, 0
+
+    # Walk keyEvents then commentary, looking for "Penalty Shootout ends" line
+    candidates: list[str] = []
+    comp = ((data.get("header") or {}).get("competitions") or [{}])[0]
+    for e in (comp.get("keyEvents") or []):
+        txt = e.get("text") or ""
+        if "Penalty Shootout ends" in txt:
+            candidates.append(txt)
+    if not candidates:
+        for c in (data.get("commentary") or []):
+            txt = c.get("text") or ""
+            if "Penalty Shootout ends" in txt:
+                candidates.append(txt)
+                break  # only need first match
+
+    if not candidates:
+        return None, None, 0
+
+    m = _SHOOTOUT_END_RE.search(candidates[0])
+    if not m:
+        print(f"[espn] shootout regex miss on: {candidates[0][:80]!r}")
+        return None, None, 0
+
+    s1 = int(m["s1"])  # team1 shootout score
+    s2 = int(m["s2"])  # team2 shootout score
+    t1 = m["t1"].strip()
+    t2 = m["t2"].strip()
+
+    # Map t1/t2 → home/away based on ESPN competitors
+    home_name = None
+    away_name = None
+    for c in (comp.get("competitors") or []):
+        if c.get("homeAway") == "home":
+            home_name = (c.get("team", {}) or {}).get("displayName") or (c.get("team", {}) or {}).get("name")
+        elif c.get("homeAway") == "away":
+            away_name = (c.get("team", {}) or {}).get("displayName") or (c.get("team", {}) or {}).get("name")
+
+    if not home_name or not away_name:
+        return None, None, 1  # We have shootout data but can't map to home/away
+
+    def _eq(a: str | None, b: str) -> bool:
+        if not a:
+            return False
+        return a.strip().lower() == b.strip().lower() or en_alias_to_canonical(a) == en_alias_to_canonical(b)
+
+    if _eq(home_name, t1):
+        return s1, s2, 1
+    if _eq(away_name, t1):
+        return s2, s1, 1
+    # Fallback: last try — match by substring (covers "South Korea" vs "Korea Republic" etc.)
+    if t1 in home_name or home_name in t1:
+        return s1, s2, 1
+    if t1 in away_name or away_name in t1:
+        return s2, s1, 1
+    print(f"[espn] shootout team mapping miss: t1={t1!r} t2={t2!r} home={home_name!r} away={away_name!r}")
+    return None, None, 1
 
 
 # ── DB upsert (same pattern as openfootball_live.py) ────────────────────────
@@ -330,16 +440,31 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
     skipped_finished_downgrade = 0
 
     for m in matches:
+        # v1.4.0: 如果 ESPN 标记这是点球大战, 抓 summary 补点球比分
+        if m.get("_is_shootout") and m.get("espn_id"):
+            hps, aps, dby = fetch_espn_shootout(m["espn_id"])
+            if hps is not None and aps is not None:
+                m["home_pen_score"] = hps
+                m["away_pen_score"] = aps
+                m["decided_by_penalties"] = 1
+                print(f"[scraper] shootout: {m.get('home_team')} {hps}-{aps} {m.get('away_team')} (espn_id={m['espn_id']})")
+            else:
+                # summary 抓不到具体比分, 但标记是点球. 留 decided_by=1 等待人工补录
+                m["decided_by_penalties"] = 1
         # ── 1) Find the existing DB row (with home/away swap tolerance) ──
         row = db.execute("""
-            SELECT match_id, home_score, away_score, status
+            SELECT match_id, home_score, away_score, status,
+                   home_pen_score, away_pen_score, decided_by_penalties
             FROM matches
             WHERE match_date = ? AND home_team = ? AND away_team = ?
         """, (m["match_date"], m["home_team"], m["away_team"])).fetchone()
         swapped = False
         if not row:
             row = db.execute("""
-                SELECT match_id, home_score, away_score, status
+                SELECT match_id, home_score, away_score, status,
+
+                       home_pen_score, away_pen_score, decided_by_penalties
+
                 FROM matches
                 WHERE match_date = ? AND home_team = ? AND away_team = ?
             """, (m["match_date"], m["away_team"], m["home_team"])).fetchone()
@@ -367,13 +492,19 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
                 for offset in (-1, 1):
                     probe = (base + timedelta(days=offset)).isoformat()
                     cand = db.execute("""
-                        SELECT match_id, home_score, away_score, status
+                        SELECT match_id, home_score, away_score, status,
+
+                               home_pen_score, away_pen_score, decided_by_penalties
+
                         FROM matches
                         WHERE match_date = ? AND home_team = ? AND away_team = ?
                     """, (probe, m["home_team"], m["away_team"])).fetchone()
                     if not cand:
                         cand = db.execute("""
-                            SELECT match_id, home_score, away_score, status
+                            SELECT match_id, home_score, away_score, status,
+
+                                   home_pen_score, away_pen_score, decided_by_penalties
+
                             FROM matches
                             WHERE match_date = ? AND home_team = ? AND away_team = ?
                         """, (probe, m["away_team"], m["home_team"])).fetchone()
@@ -420,8 +551,9 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
                     INSERT INTO matches
                         (match_id, round, matchday, group_name, match_date, match_time,
                          home_team, away_team, venue, home_score, away_score, status,
+                         home_pen_score, away_pen_score, decided_by_penalties,
                          goals_json, last_updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     new_id,
                     m.get("round") or "",
@@ -435,6 +567,9 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
                     m.get("home_score"),
                     m.get("away_score"),
                     m.get("status", "scheduled"),
+                    m.get("home_pen_score"),
+                    m.get("away_pen_score"),
+                    int(m.get("decided_by_penalties") or 0),
                     "[]",
                     now,
                 ))
@@ -448,7 +583,8 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
                 # Re-query and fall through to the UPDATE path.
                 print(f"[scraper] INSERT race for {m['home_team']} vs {m['away_team']}: {e}")
                 row = db.execute("""
-                    SELECT match_id, home_score, away_score, status
+                    SELECT match_id, home_score, away_score, status,
+                           home_pen_score, away_pen_score, decided_by_penalties
                     FROM matches
                     WHERE match_date = ? AND home_team = ? AND away_team = ?
                 """, (m["match_date"], m["home_team"], m["away_team"])).fetchone()
@@ -464,13 +600,33 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
             continue  # don't downgrade (CCTV might lag behind a manually-finished match)
 
         matched += 1
-        if old_h == m["home_score"] and old_a == m["away_score"] and old_status == m["status"]:
+        # v1.4.0: 也比较点球字段, 避免漏更新 (e.g. 上一轮抓不到 shootout, 这次抓到了)
+        try:
+            old_hp = row["home_pen_score"] if "home_pen_score" in row.keys() else None
+            old_ap = row["away_pen_score"] if "away_pen_score" in row.keys() else None
+            old_db = row["decided_by_penalties"] if "decided_by_penalties" in row.keys() else 0
+        except (IndexError, KeyError):
+            old_hp = old_ap = None
+            old_db = 0
+        new_hp = m.get("home_pen_score")
+        new_ap = m.get("away_pen_score")
+        new_db = int(m.get("decided_by_penalties") or 0)
+        if (old_h == m["home_score"] and old_a == m["away_score"] and old_status == m["status"]
+                and old_hp == new_hp and old_ap == new_ap and old_db == new_db):
             continue  # no change, just touched
 
+        # v1.4.0: 总是 UPDATE 点球字段 (即使是 None/0, 允许 scraper 把人工修正的覆盖回来)
         db.execute("""
-            UPDATE matches SET home_score=?, away_score=?, status=?, last_updated=?
+            UPDATE matches SET home_score=?, away_score=?, status=?,
+                               home_pen_score=?, away_pen_score=?, decided_by_penalties=?,
+                               last_updated=?
             WHERE match_id = ?
-        """, (m["home_score"], m["away_score"], m["status"], now, mid))
+        """, (
+            m["home_score"], m["away_score"], m["status"],
+            m.get("home_pen_score"), m.get("away_pen_score"),
+            int(m.get("decided_by_penalties") or 0),
+            now, mid,
+        ))
         updated += 1
         if m["status"] == "finished" and old_status != "finished":
             newly_finished += 1

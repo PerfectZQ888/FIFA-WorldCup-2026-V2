@@ -42,6 +42,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 import analyzer
 from scrapers import cctv_espn_live
@@ -59,6 +60,39 @@ def db() -> sqlite3.Connection:
     return conn
 
 
+def _add_column_if_missing(cur: sqlite3.Cursor, table: str, col: str, decl: str) -> None:
+    """Idempotent ADD COLUMN — silently no-op if column already exists."""
+    cur.execute(f"PRAGMA table_info({table})")
+    if col in {r[1] for r in cur.fetchall()}:
+        return
+    cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    print(f"[migrate] {table}.{col} ADDED ({decl})")
+
+
+def migrate_db() -> None:
+    """Idempotent schema migration. Runs on every app startup (cheap).
+
+    v1.4.0 (2026-06-30): Add penalty-shootout columns to matches + bracket.
+
+    Background: WC 2026 淘汰赛开始后, 平局进入点球大战. 原 schema 缺 3 列:
+      - matches.home_pen_score   (主队点球得分)
+      - matches.away_pen_score   (客队点球得分)
+      - matches.decided_by_penalties  (0/1 标志: 本场是否点球决出胜负)
+    Bracket 也加 1 列:
+      - bracket.winner_via_penalties  (0/1 标志: 晋级方靠点球, 用于 bracket 角标)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cur = conn.cursor()
+        _add_column_if_missing(cur, "matches", "home_pen_score", "INTEGER DEFAULT NULL")
+        _add_column_if_missing(cur, "matches", "away_pen_score", "INTEGER DEFAULT NULL")
+        _add_column_if_missing(cur, "matches", "decided_by_penalties", "INTEGER DEFAULT 0")
+        _add_column_if_missing(cur, "bracket", "winner_via_penalties", "INTEGER DEFAULT 0")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def row_to_dict(row: sqlite3.Row | None) -> dict | None:
     if row is None:
         return None
@@ -71,6 +105,11 @@ def rows_to_list(rows) -> list[dict]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # v1.4.0: 启动时跑一次 schema 迁移 (idempotent, 已存在的列不会重复加)
+    try:
+        migrate_db()
+    except Exception as e:
+        print(f"[migrate] FAILED: {e}")
     scheduler = AsyncIOScheduler()
     # Nightly recompute predictions at 23:00
     scheduler.add_job(run_prediction_job, "cron", hour=23, minute=0)
@@ -461,6 +500,82 @@ async def refresh_lineups() -> dict:
     return {"ok": True, **stats}
 
 
+# ── v1.4.0 — 手动补录点球大战 (penalty shootout) ─────────────────────────────
+class ShootoutUpdate(BaseModel):
+    """v1.4.0 手动录入点球大战结果 (用于 scraper 没抓到时的兜底)."""
+    home_pen_score: int = Field(..., ge=0, le=20, description="主队点球得分")
+    away_pen_score: int = Field(..., ge=0, le=20, description="客队点球得分")
+
+
+@app.post("/api/admin/matches/{match_id}/shootout")
+async def set_shootout(match_id: str, body: ShootoutUpdate) -> dict:
+    """手动补录 / 修正一场比赛的点球大战结果.
+
+    触发条件:
+      - scraper 抓 ESPN 失败 (海外节点不通)
+      - CCTV 比赛列表点球信息缺失
+      - 运营手动核对 (e.g. 体育新闻确认结果)
+
+    副作用:
+      - matches: home_pen_score / away_pen_score / decided_by_penalties=1
+      - bracket: 同步 winner_via_penalties=1 (让 bracket 角标显示点球晋级)
+      - bracket.winner: 如果 bracket 还在占位状态, 自动更新为实际赢家
+
+    Returns: 写后状态.
+    """
+    conn = db()
+    row = conn.execute(
+        "SELECT match_id, home_team, away_team, home_score, away_score, status, "
+        "       round, group_name, home_pen_score, away_pen_score, decided_by_penalties "
+        "FROM matches WHERE match_id=?", (match_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, f"match {match_id} not found")
+    if row["status"] != "finished":
+        conn.close()
+        raise HTTPException(400, f"match {match_id} status is '{row['status']}', not 'finished'")
+    if row["home_score"] != row["away_score"]:
+        conn.close()
+        raise HTTPException(400, f"match {match_id} not a draw ({row['home_score']}-{row['away_score']}), "
+                                f"no shootout needed")
+
+    decided_by = 1
+    if body.home_pen_score == body.away_pen_score:
+        # 容错: 录入的也是平局, 强制 decided_by=0
+        decided_by = 0
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE matches SET home_pen_score=?, away_pen_score=?, decided_by_penalties=?, last_updated=? "
+        "WHERE match_id=?",
+        (body.home_pen_score, body.away_pen_score, decided_by, now_iso, match_id),
+    )
+
+    # bracket: 同步 winner_via_penalties + 实际 winner
+    winner_team = row["home_team"] if body.home_pen_score > body.away_pen_score else (
+        row["away_team"] if body.away_pen_score > body.home_pen_score else None
+    )
+    if winner_team:
+        bk = conn.execute("SELECT winner, round FROM bracket WHERE match_id=?", (match_id,)).fetchone()
+        if bk:
+            update_winner = bk["winner"] in (None, "", "TBD") or bk["winner"] == winner_team
+            if update_winner:
+                conn.execute(
+                    "UPDATE bracket SET winner=?, winner_via_penalties=? WHERE match_id=?",
+                    (winner_team, 1 if decided_by else 0, match_id),
+                )
+
+    conn.commit()
+    # 重新读
+    row2 = conn.execute(
+        "SELECT match_id, home_team, away_team, home_pen_score, away_pen_score, decided_by_penalties, last_updated "
+        "FROM matches WHERE match_id=?", (match_id,)
+    ).fetchone()
+    conn.close()
+    return {"ok": True, "match": dict(row2), "winner": winner_team}
+
+
 # ── v4 — per-match AI prediction endpoint ──────────────────────────────────────
 @app.get("/api/matches/{match_id}/prediction")
 async def match_prediction(match_id: str) -> dict:
@@ -590,7 +705,9 @@ async def knockout() -> dict:
     conn = db()
     rows = conn.execute("""
         SELECT match_id, round, matchday, match_date, match_time, home_team, away_team,
-               venue, status, predicted_winner, predicted_home_score, predicted_away_score,
+               venue, status, home_score, away_score,
+               home_pen_score, away_pen_score, decided_by_penalties,
+               predicted_winner, predicted_home_score, predicted_away_score,
                home_win_prob, away_win_prob
         FROM matches
         WHERE round IN ('Round of 32','Round of 16','Quarter-finals',
@@ -667,7 +784,9 @@ async def bracket() -> dict:
     conn = db()
     rows = conn.execute("""
         SELECT match_id, round, match_date, match_time, home_team, away_team,
-               venue, status, predicted_winner, predicted_home_score,
+               venue, status, home_score, away_score,
+               home_pen_score, away_pen_score, decided_by_penalties,
+               predicted_winner, predicted_home_score,
                predicted_away_score, home_win_prob, draw_prob, away_win_prob,
                score_distribution_json
         FROM matches
@@ -716,6 +835,15 @@ async def bracket() -> dict:
             ph = m.get("predicted_home_score")
             pa = m.get("predicted_away_score")
             pw = m.get("predicted_winner")
+            # v1.4.0: 点球大战信息 (decided_by_penalties + 点球比分) 注入节点
+            home_pen = m.get("home_pen_score")
+            away_pen = m.get("away_pen_score")
+            decided_by_pk = bool(m.get("decided_by_penalties"))
+            shootout_score = (
+                f"{home_pen}-{away_pen}"
+                if decided_by_pk and home_pen is not None and away_pen is not None
+                else None
+            )
             nodes.append({
                 "match_id": m["match_id"],
                 "round": rnd_name,
@@ -729,6 +857,12 @@ async def bracket() -> dict:
                 "away_team": a,
                 "home_team_resolved": h_resolved or h,
                 "away_team_resolved": a_resolved or a,
+                "home_score": m.get("home_score"),
+                "away_score": m.get("away_score"),
+                "home_pen_score": home_pen,
+                "away_pen_score": away_pen,
+                "decided_by_penalties": decided_by_pk,
+                "shootout_score": shootout_score,
                 "predicted_winner": pw,
                 "predicted_score": f"{ph}-{pa}" if ph is not None and pa is not None else None,
                 "home_win_prob": m.get("home_win_prob"),

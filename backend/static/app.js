@@ -752,9 +752,13 @@ function liveCard(m) {
   const timeCst = cstTimeStr(m);
   const dateCst = cstDateStr(m);
 
-  let scoreHtml, stateCls;
+  let scoreHtml, stateCls, pkBadge = '';
   if (isFinished) {
-    scoreHtml = `<span>${m.home_score}</span><span class="sep">:</span><span>${m.away_score}</span><span class="extra">已结束</span>`;
+    // v1.4.0: 点球大战副标
+    if (m.decided_by_penalties && m.home_pen_score != null && m.away_pen_score != null) {
+      pkBadge = `<span class="pk-inline" title="本场以点球大战决出胜负">⚽点球 ${m.home_pen_score}:${m.away_pen_score}</span>`;
+    }
+    scoreHtml = `<span>${m.home_score}</span><span class="sep">:</span><span>${m.away_score}</span><span class="extra">已结束</span>${pkBadge}`;
     stateCls = 'finished';
   } else if (isLive) {
     scoreHtml = `<span>${m.home_score ?? 0}</span><span class="sep">:</span><span>${m.away_score ?? 0}</span><span class="extra">进行中</span>`;
@@ -1412,6 +1416,13 @@ async function showMatchDetail(matchId) {
         <div class="modal-score-final">
           <span class="vs">FINAL</span>
           ${m.home_score} : ${m.away_score}
+          ${(m.decided_by_penalties && m.home_pen_score != null && m.away_pen_score != null)
+            ? `<div class="shootout-badge" title="本场以点球大战决出胜负">
+                 <span class="shootout-icon">⚽</span>
+                 <span class="shootout-label">点球大战</span>
+                 <span class="shootout-score">${m.home_pen_score} : ${m.away_pen_score}</span>
+               </div>`
+            : ''}
         </div>
         <div class="modal-team modal-team-away">
           <span>${awayCn}</span>

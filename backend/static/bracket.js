@@ -194,9 +194,16 @@
     // 顶部条: 比赛ID + 预测比分
     const top = document.createElement('div');
     top.className = 'top-bar';
+    // v1.4.0: 如果该比赛已踢完且点球决胜, 在 top-bar 加 PK 角标
+    const isFinished = m.status === 'finished';
+    const isShootout = isFinished && m.decided_by_penalties;
+    const actualScore = isFinished && m.home_score != null
+      ? (m.home_score + '-' + m.away_score
+          + (isShootout ? ' <span class="shootout-tag" title="点球大战 ' + esc(m.home_pen_score + '-' + m.away_pen_score) + ' 晋级">(点球)</span>' : ''))
+      : null;
     top.innerHTML =
       '<span class="match-id">' + esc(m.match_id) + '</span>' +
-      '<span class="score">' + (predicted ? esc(m.predicted_score) : '—') + '</span>';
+      '<span class="score">' + (actualScore || (predicted ? esc(m.predicted_score) : '—')) + '</span>';
     card.appendChild(top);
 
     if (predicted) {
@@ -302,6 +309,13 @@
       lines.push('<div class="t-row">胜率 · 主 <b>' + (m.home_win_prob || 0).toFixed(1) + '%</b> / 客 <b>' + (m.away_win_prob || 0).toFixed(1) + '%</b></div>');
       if (m.predicted_score) {
         lines.push('<div class="t-row">预测比分 · <b style="color:#d4af37">' + esc(m.predicted_score) + '</b></div>');
+      }
+      // v1.4.0: 实际比分 + 点球大战信息
+      if (isFinished && m.home_score != null) {
+        lines.push('<div class="t-row">实际比分 · <b style="color:#a3e635">' + esc(m.home_score + '-' + m.away_score) + '</b></div>');
+        if (isShootout && m.home_pen_score != null) {
+          lines.push('<div class="t-row">点球大战 · <b style="color:#ff8a9e">' + esc(m.home_pen_score + '-' + m.away_pen_score) + '</b> 晋级</div>');
+        }
       }
       lines.push('<div class="t-pred">🏆 AI 预测胜方: ' + esc(m.predicted_winner) + '</div>');
     } else {

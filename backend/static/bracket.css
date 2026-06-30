@@ -235,6 +235,18 @@
 }
 .card .match-id { font-family: 'Orbitron', monospace; letter-spacing: 0.5px; }
 .card .score    { font-family: 'Orbitron', monospace; font-size: 11px; color: var(--gold-2); font-weight: 700; }
+.card .shootout-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  background: rgba(255, 138, 158, 0.18);
+  border: 1px solid rgba(255, 138, 158, 0.4);
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #ffd0d6;
+  cursor: help;
+}
 .card.is-tbd .score { color: var(--text-mute); }
 
 /* ───── 球队行 ───── */
