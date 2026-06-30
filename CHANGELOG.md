@@ -5,6 +5,37 @@
 > 💡 **完整 release notes** 在 [`RELEASE_NOTES/`](./RELEASE_NOTES/) 目录。
 > 🌐 **GitHub Releases** 见 https://github.com/PerfectZQ888/FIFA-WorldCup-2026-V2/releases
 
+## [v1.4.1] - 2026-06-30
+
+### 🐛 Fixed (直播中心数据修复)
+- **赛事直播中心名称/数据错误** (用户反馈)
+  - 症状: `/api/matches/live` 返回占位符 ("1F"/"2C"/"3rd-ABCDF") 和假比赛 ("Germany vs Third Place Group A/B/C/D/F")
+  - 根因 1: R32 比赛 (M073-M088) 在 seed 中用占位符, 小组赛结束前 CCTV 没法匹配
+  - 根因 2: CCTV 偶尔会发 "Third Place Group X/Y/Z" / "Group I Winner" 等占位文本当 team name, 之前 scraper 误插入 (M105-M108)
+  - 根因 3: 完赛 R32 的 home_score/away_score 用的是含 PK 的"实时比分"(4-5), 应是 90 分钟比分 (1-1) + 单独 PK 字段
+
+### ✨ Added (新功能)
+- **bracket slot resolver**: 从小组赛 standings 自动解析 "1A" → Mexico, "3rd-ABCDF" → best 3rd from A,B,C,D,F (排除已分配)
+- **CCTV 16 场 R32 真实数据回填**: 3 场已完赛 (含 1 场点球大战 德国 1-1 巴拉圭 PK 3-4) + 13 场待开赛的真队名
+- **scraper 防御层**: `_is_placeholder_team()` 12 种占位符 regex 模式, 防止 "Third Place Group ..." / "Group I Winner" / "1A" / "W73" 等污染 DB
+- **/api/matches/live 防御层**: SQL `NOT GLOB`/`NOT LIKE` 过滤 8 种占位符模式, 即使 DB 有残留也不返回
+- **CCTV scores.Penalties 解析**: `home_pen_score`/`away_pen_score`/`decided_by_penalties` 三个字段从 CCTV `scores.Penalties.team1/2` 自动填充
+
+### 🗑️ Removed
+- **M105-M108 (4 个假 3rd place 比赛)**: 由 scraper 误插入, 不存在于 FIFA 2026 真实赛程. 已 DELETE.
+
+### 🐛 Fixed (bug 修复)
+- **scraper 4-tuple unpack 错误**: v1.4.0 加了 3 个 PK 字段后, `mid, old_h, old_a, old_status = row` 实际 row 有 7 列, 报 "too many values to unpack". 改为 7-tuple unpack.
+- **scraper 实时/全赛分数混用**: 完赛用 `homeFullScore`(90min 比分) 而非 `homeScore`(含 PK 的总比分). 实时/未开赛仍用 `homeScore`.
+
+### 📦 Stats
+- Files: 3 modified (app.py, cctv_espn_live.py, CHANGELOG.md)
+- API: `/api/matches/live` SQL 加 8 个 NOT GLOB/NOT LIKE 过滤
+- DB: M105-M108 4 行 DELETE, M073-M088 16 行 UPDATE 队名/状态/分数, M074 1 行 UPDATE 加 PK 字段
+- 防御: 12 个 placeholder regex patterns in scraper
+
+---
+
 ## [v1.4.0] - 2026-06-30
 
 ### ✨ Added (新功能)

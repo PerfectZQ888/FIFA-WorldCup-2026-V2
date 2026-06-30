@@ -393,10 +393,24 @@ async def matches_live() -> dict:
     # 6h 前 (含跨日, 最多回看 1 天)
     window_start = (now - timedelta(hours=6)).date()
     window_end = (now + timedelta(days=1)).date()
+    # v1.4.1: 排除占位符/未决队伍 (e.g. "1A", "2B", "3rd-ABCDF", "Third Place Group X/Y/Z",
+    # "Group I Winner"). 这些是 seed 的临时占位, 不应在直播中心出现.
+    # 用 GLOB/LIKE 而不是 regex (sqlite 没有内置 regex, 性能差).
     rows = conn.execute("""
         SELECT * FROM matches
-        WHERE match_date BETWEEN ? AND ?
-           OR status='live'
+        WHERE (match_date BETWEEN ? AND ? OR status='live')
+          AND home_team NOT GLOB '[123][A-L]*'
+          AND home_team NOT GLOB '3rd-*'
+          AND home_team NOT GLOB 'W[0-9]*'
+          AND home_team NOT GLOB 'L[0-9]*'
+          AND home_team NOT LIKE 'Third Place%'
+          AND home_team NOT LIKE 'Group %'
+          AND away_team NOT GLOB '[123][A-L]*'
+          AND away_team NOT GLOB '3rd-*'
+          AND away_team NOT GLOB 'W[0-9]*'
+          AND away_team NOT GLOB 'L[0-9]*'
+          AND away_team NOT LIKE 'Third Place%'
+          AND away_team NOT LIKE 'Group %'
         ORDER BY match_date, match_time
     """, (window_start.isoformat(), window_end.isoformat())).fetchall()
     out = []

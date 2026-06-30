@@ -59,6 +59,34 @@ STATUS_MAP_ESPN = {
 }
 
 
+# v1.4.1: 占位符/未决队伍检测 — CCTV 偶尔会回 "Third Place Group A/B/C/D/F" 或
+# "Group I Winner" 之类的占位文本当 team name, 之前会污染 DB (插入 M105-M108 这种
+# 假比赛). 这里统一过滤.
+import re as _re_placeholder
+_PLACEHOLDER_PATTERNS = [
+    # CCTV 实际会发的格式
+    _re_placeholder.compile(r'^Third Place Group [A-Z/]+', _re_placeholder.IGNORECASE),
+    _re_placeholder.compile(r'^Group [A-L]\s+(Winner|2nd Place|3rd Place|1st Place|Loser|Runner[- ]?up|2nd|3rd|1st)', _re_placeholder.IGNORECASE),
+    _re_placeholder.compile(r'^Winner Group [A-L]', _re_placeholder.IGNORECASE),
+    # seed 用的 bracket slot 占位符 (防御)
+    _re_placeholder.compile(r'^[123][A-L](\s*\(alt\))?$'),
+    _re_placeholder.compile(r'^3rd-[A-L]+$'),
+    _re_placeholder.compile(r'^[WL]\d+$'),  # W73 / L101
+    _re_placeholder.compile(r'^TBD$|^待定$|^未定$', _re_placeholder.IGNORECASE),
+]
+
+
+def _is_placeholder_team(name: str | None) -> bool:
+    """True if the name is a placeholder (not a real team), e.g. 'Third Place Group A/B/C/D'."""
+    if not name:
+        return True
+    name = name.strip()
+    for p in _PLACEHOLDER_PATTERNS:
+        if p.match(name):
+            return True
+    return False
+
+
 # ── CCTV ────────────────────────────────────────────────────────────────────
 
 def _cctv_season_url(ts_ms: int) -> str:
@@ -166,14 +194,19 @@ def _cctv_match_to_dict(m: dict) -> dict:
         "match_time": utc_time,
         "_cst_start": cst_orig,  # preserved for logging / debugging
         "status": STATUS_MAP_CCTV.get(m.get("gameStatus"), "scheduled"),
-        "home_score": m.get("homeScore"),
-        "away_score": m.get("guestScore"),
+        # v1.4.1: CCTV 完赛时 homeScore=4 含 PK (90+加时+点球), 90 分钟比分在 homeFullScore.
+        # 完赛用 homeFullScore (无点球) + 写 PK 字段; 进行中/未开赛才用 homeScore.
+        "home_score": m.get("homeFullScore") if m.get("gameStatus") == 3 else m.get("homeScore"),
+        "away_score": m.get("guestFullScore") if m.get("gameStatus") == 3 else m.get("guestScore"),
         "ht_home": m.get("homeHalfScore"),
         "ht_away": m.get("guestHalfScore"),
         "group": (m.get("roundType") or "").replace("组", ""),  # A组 → A
         "round": m.get("gameRound", ""),
         "venue": m.get("gamePlace", ""),
         "live_minute": m.get("currentTime") or "",
+        # v1.4.1: CCTV `scores.Penalties` 在完赛时含 {team1, team2} 点球比分. 没 PK 就是 None.
+        "_cctv_pen_team1": (m.get("scores") or {}).get("Penalties", {}).get("team1") if m.get("gameStatus") == 3 else None,
+        "_cctv_pen_team2": (m.get("scores") or {}).get("Penalties", {}).get("team2") if m.get("gameStatus") == 3 else None,
     }
 
 
@@ -440,6 +473,20 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
     skipped_finished_downgrade = 0
 
     for m in matches:
+        # v1.4.1: 如果 home/away team 是占位符 (e.g. "Third Place Group X/Y/Z"),
+        # 跳过这条 CCTV 记录 — 不应该插入 DB. 之前误插入导致 M105-M108 这种假比赛.
+        if _is_placeholder_team(m.get("home_team")) or _is_placeholder_team(m.get("away_team")):
+            print(f"[scraper] skip placeholder team: {m.get('home_team')!r} vs {m.get('away_team')!r} on {m.get('match_date')}")
+            continue
+        # v1.4.1: CCTV `_cctv_pen_team1/2` (从 scores.Penalties 拿到的点球比分).
+        # 注意 CCTV 视角: team1 = 主场, team2 = 客场. 与 DB 的 home/away 一致.
+        pk1 = m.pop("_cctv_pen_team1", None)
+        pk2 = m.pop("_cctv_pen_team2", None)
+        if pk1 is not None and pk2 is not None:
+            m["home_pen_score"] = int(pk1)
+            m["away_pen_score"] = int(pk2)
+            m["decided_by_penalties"] = 1
+            print(f"[scraper] PK via CCTV scores.Penalties: {m.get('home_team')} {pk1}-{pk2} {m.get('away_team')}")
         # v1.4.0: 如果 ESPN 标记这是点球大战, 抓 summary 补点球比分
         if m.get("_is_shootout") and m.get("espn_id"):
             hps, aps, dby = fetch_espn_shootout(m["espn_id"])
@@ -593,21 +640,16 @@ def upsert_matches(matches: list[dict], db_path: Path = DB_PATH) -> dict:
                     continue
 
         # ── 3) UPDATE existing row ──
-        mid, old_h, old_a, old_status = row
+        # v1.4.0: row 现在有 7 列 (match_id, home_score, away_score, status,
+        # home_pen_score, away_pen_score, decided_by_penalties). 用 * 收剩下的.
+        mid, old_h, old_a, old_status, old_hp, old_ap, old_db = row
 
         if old_status == "finished" and m["status"] != "finished":
             skipped_finished_downgrade += 1
             continue  # don't downgrade (CCTV might lag behind a manually-finished match)
 
         matched += 1
-        # v1.4.0: 也比较点球字段, 避免漏更新 (e.g. 上一轮抓不到 shootout, 这次抓到了)
-        try:
-            old_hp = row["home_pen_score"] if "home_pen_score" in row.keys() else None
-            old_ap = row["away_pen_score"] if "away_pen_score" in row.keys() else None
-            old_db = row["decided_by_penalties"] if "decided_by_penalties" in row.keys() else 0
-        except (IndexError, KeyError):
-            old_hp = old_ap = None
-            old_db = 0
+        # v1.4.0: 也比较点球字段, 避免漏更新. old_hp/ap/db 已从 row 解包出来 (上面).
         new_hp = m.get("home_pen_score")
         new_ap = m.get("away_pen_score")
         new_db = int(m.get("decided_by_penalties") or 0)
